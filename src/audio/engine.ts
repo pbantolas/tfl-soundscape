@@ -26,7 +26,7 @@ export function scheduleArrival(
     setTimeout(() => synth.dispose(), disposeDelay * 1000)
   }, arrivalTime)
 
-  return id as unknown as number
+  return id
 }
 
 export function cancelScheduled(id: number) {

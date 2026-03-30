@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Tone from 'tone'
 import { fetchArrivals } from '../api/tfl'
-import { scheduleArrival } from '../audio/engine'
+import { scheduleArrival, cancelScheduled } from '../audio/engine'
 import type { StationSoundConfig, ScheduledArrival } from '../config/types'
 import stationsConfig from '../config/stations.json'
 
@@ -15,6 +15,7 @@ export function useTflEngine() {
   const scheduled = useRef(new Map<string, ScheduledArrival>())
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const runningRef = useRef(false)
 
   const triggerDisplay = useCallback((stationName: string, lineName: string) => {
     setDisplay({ stationName, lineName })
@@ -25,6 +26,9 @@ export function useTflEngine() {
   const pollStation = useCallback(async (station: StationSoundConfig) => {
     try {
       const predictions = await fetchArrivals(station.stationId)
+
+      if (!runningRef.current) return
+
       const now = Tone.now()
 
       for (const pred of predictions) {
@@ -38,12 +42,14 @@ export function useTflEngine() {
 
         const arrivalTime = now + arrivalSeconds
 
-        scheduleArrival(lineConfig, arrivalTime, () => {
+        const eventId = scheduleArrival(lineConfig, arrivalTime, () => {
           triggerDisplay(station.stationName, pred.lineName)
+          scheduled.current.delete(pred.id)
         })
 
         scheduled.current.set(pred.id, {
           predictionId: pred.id,
+          eventId,
           stationName: station.stationName,
           lineId: pred.lineId,
           lineName: pred.lineName,
@@ -66,6 +72,7 @@ export function useTflEngine() {
   const start = useCallback(async () => {
     await Tone.start()
     Tone.getTransport().start()
+    runningRef.current = true
     setRunning(true)
 
     const stagger = POLL_WINDOW_MS / stations.length
@@ -82,6 +89,8 @@ export function useTflEngine() {
   }, [pollStation])
 
   const stop = useCallback(() => {
+    runningRef.current = false
+
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
@@ -90,15 +99,21 @@ export function useTflEngine() {
       clearTimeout(fadeTimerRef.current)
       fadeTimerRef.current = null
     }
+
+    for (const entry of scheduled.current.values()) {
+      cancelScheduled(entry.eventId)
+    }
+    scheduled.current.clear()
+
     Tone.getTransport().stop()
     Tone.getTransport().cancel()
-    scheduled.current.clear()
     setRunning(false)
     setDisplay(null)
   }, [])
 
   useEffect(() => {
     return () => {
+      runningRef.current = false
       if (intervalRef.current) clearInterval(intervalRef.current)
       if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current)
     }

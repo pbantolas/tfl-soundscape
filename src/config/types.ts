@@ -36,6 +36,7 @@ export interface TflPrediction {
 
 export interface ScheduledArrival {
   predictionId: string
+  eventId: number
   stationName: string
   lineId: string
   lineName: string
