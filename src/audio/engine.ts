@@ -41,6 +41,8 @@ type EngineEvent = {
   config: ResolvedLineSoundConfig
 }
 
+type ShouldTrigger = () => boolean
+
 let reverb: Tone.Reverb | null = null
 let limiter: Tone.Limiter | null = null
 const voicePools = new Map<SynthKind, VoiceSlot[]>()
@@ -194,9 +196,11 @@ function prepareVoiceForNote(synth: SynthVoice, volume: number, time: number) {
   synth.volume.setValueAtTime(volume, time)
 }
 
-function scheduleEvent(event: EngineEvent, time: number, onTrigger: () => void): number {
+function scheduleEvent(event: EngineEvent, time: number, onTrigger: () => void, shouldTrigger: ShouldTrigger = () => true): number {
   const id = Tone.getTransport().schedule((triggerTime) => {
     pendingIds.delete(id)
+
+    if (!shouldTrigger()) return
 
     if (event.kind !== 'note') return
 
@@ -255,9 +259,10 @@ function debugAudio(label: string, extra?: Record<string, unknown>) {
 export function scheduleArrival(
   config: ResolvedLineSoundConfig,
   arrivalTime: number,
-  onTrigger: () => void
+  onTrigger: () => void,
+  shouldTrigger?: ShouldTrigger,
 ): number {
-  return scheduleEvent({ kind: 'note', config }, arrivalTime, onTrigger)
+  return scheduleEvent({ kind: 'note', config }, arrivalTime, onTrigger, shouldTrigger)
 }
 
 export function cancelScheduled(id: number) {

@@ -5,11 +5,15 @@ interface ScrubberProps {
   scrubMs: number
   timelineStartMs: number
   timelineEndMs: number
+  loopEndMs: number
   allEvents: TimelineEvent[]
   isLive: boolean
+  isAutoPingPong: boolean
+  autoRate: number
   onSeek: (ms: number) => void
   onSeekEnd: (ms: number) => void
   onGoLive: () => void
+  onStartAutoPingPong: () => void
 }
 
 function toPercent(ms: number, start: number, end: number): number {
@@ -21,11 +25,15 @@ export function Scrubber({
   scrubMs,
   timelineStartMs,
   timelineEndMs,
+  loopEndMs,
   allEvents,
   isLive,
+  isAutoPingPong,
+  autoRate,
   onSeek,
   onSeekEnd,
   onGoLive,
+  onStartAutoPingPong,
 }: ScrubberProps) {
   const barRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
@@ -91,6 +99,7 @@ export function Scrubber({
 
   const thumbPercent = toPercent(scrubMs, timelineStartMs, timelineEndMs)
   const nowPercent = toPercent(nowMs, timelineStartMs, timelineEndMs)
+  const loopEndPercent = toPercent(loopEndMs, timelineStartMs, timelineEndMs)
 
   // Sample up to 50 events for markers
   const markerEvents = allEvents.length > 50
@@ -105,6 +114,21 @@ export function Scrubber({
   return (
     <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-3">
       <div className="flex items-center gap-3 mb-2">
+        {!isAutoPingPong ? (
+          <button
+            onClick={onStartAutoPingPong}
+            className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/75 transition-colors uppercase tracking-[0.2em] font-pixel"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-300/70" />
+            Auto {autoRate}x
+          </button>
+        ) : (
+          <div className="flex items-center gap-1.5 text-xs text-cyan-200/70 uppercase tracking-[0.2em] font-pixel">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-300" />
+            Auto {autoRate}x
+          </div>
+        )}
+
         {!isLive ? (
           <button
             onClick={onGoLive}
@@ -145,6 +169,14 @@ export function Scrubber({
           className="absolute left-0 top-0 h-full rounded-full bg-white/20"
           style={{ width: `${thumbPercent}%` }}
         />
+
+        {/* Frozen loop end while auto mode is active */}
+        {isAutoPingPong && loopEndMs > timelineStartMs && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-px h-4 bg-cyan-300/90"
+            style={{ left: `${loopEndPercent}%` }}
+          />
+        )}
 
         {/* "Now" indicator — only visible in scrub mode */}
         {!isLive && (

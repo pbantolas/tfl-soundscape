@@ -2,7 +2,24 @@ import { useTflEngine } from './hooks/useTflEngine'
 import { Scrubber } from './components/Scrubber'
 
 function App() {
-  const { running, displayItems, start, stop, isLive, scrubMs, timelineStartMs, timelineEndMs, allEvents, seek, seekAndPlay, goLive } = useTflEngine()
+  const {
+    running,
+    displayItems,
+    start,
+    stop,
+    playbackMode,
+    autoRate,
+    isLive,
+    scrubMs,
+    timelineStartMs,
+    timelineEndMs,
+    loopEndMs,
+    allEvents,
+    seek,
+    seekAndPlay,
+    goLive,
+    startAutoPingPong,
+  } = useTflEngine()
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-12 bg-neutral-950 text-white">
@@ -36,11 +53,15 @@ function App() {
           scrubMs={scrubMs}
           timelineStartMs={timelineStartMs}
           timelineEndMs={timelineEndMs}
+          loopEndMs={loopEndMs}
           allEvents={allEvents}
           isLive={isLive}
+          isAutoPingPong={playbackMode === 'autoPingPong'}
+          autoRate={autoRate}
           onSeek={seek}
           onSeekEnd={seekAndPlay}
           onGoLive={goLive}
+          onStartAutoPingPong={startAutoPingPong}
         />
       )}
     </div>
