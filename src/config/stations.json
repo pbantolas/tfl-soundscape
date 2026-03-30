@@ -3,9 +3,32 @@
     "stationId": "940GZZLUOXC",
     "stationName": "Oxford Circus",
     "lines": {
-      "victoria": { "synth": "FMSynth", "note": "C3", "duration": "4n", "volume": -12 },
-      "central": { "synth": "Synth", "note": "E4", "duration": "8n", "volume": -10 },
-      "bakerloo": { "synth": "AMSynth", "note": "G2", "duration": "4n", "volume": -14 }
+      "victoria":  { "synth": "Synth",        "note": "C3",  "duration": "4n", "volume": -12 },
+      "central":   { "synth": "FMSynth",       "note": "Eb3", "duration": "8n", "volume": -10 },
+      "bakerloo":  { "synth": "AMSynth",       "note": "G3",  "duration": "4n", "volume": -14 }
+    }
+  },
+  {
+    "stationId": "940GZZLUBNK",
+    "stationName": "Bank",
+    "lines": {
+      "central":       { "synth": "FMSynth",      "note": "C4",  "duration": "8n", "volume": -10 },
+      "northern":      { "synth": "MembraneSynth", "note": "G2",  "duration": "8n", "volume": -8  },
+      "waterloo-city": { "synth": "AMSynth",       "note": "Eb4", "duration": "4n", "volume": -14 },
+      "district":      { "synth": "Synth",         "note": "G4",  "duration": "4n", "volume": -13 },
+      "circle":        { "synth": "Synth",         "note": "F4",  "duration": "4n", "volume": -13 }
+    }
+  },
+  {
+    "stationId": "940GZZLUKSX",
+    "stationName": "King's Cross St. Pancras",
+    "lines": {
+      "victoria":          { "synth": "Synth",        "note": "C5",  "duration": "4n", "volume": -12 },
+      "piccadilly":        { "synth": "FMSynth",       "note": "F4",  "duration": "8n", "volume": -11 },
+      "northern":          { "synth": "MembraneSynth", "note": "G2",  "duration": "8n", "volume": -8  },
+      "metropolitan":      { "synth": "AMSynth",       "note": "Bb4", "duration": "4n", "volume": -13 },
+      "circle":            { "synth": "Synth",         "note": "F5",  "duration": "4n", "volume": -13 },
+      "hammersmith-city":  { "synth": "Synth",         "note": "C5",  "duration": "4n", "volume": -14 }
     }
   }
 ]

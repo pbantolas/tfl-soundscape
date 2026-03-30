@@ -32,22 +32,33 @@ export function useTflEngine() {
       const now = Tone.now()
 
       for (const pred of predictions) {
-        if (scheduled.current.has(pred.id)) continue
-
         const lineConfig = station.lines[pred.lineId]
         if (!lineConfig) continue
 
         const arrivalSeconds = pred.timeToStation
         if (arrivalSeconds <= 0) continue
 
+        const stableKey = `${station.stationId}_${pred.vehicleId}_${pred.lineId}`
         const arrivalTime = now + arrivalSeconds
+        const existing = scheduled.current.get(stableKey)
+
+        if (existing) {
+          const timeUntilArrival = existing.expectedArrival - now
+          const timeDiff = Math.abs(arrivalTime - existing.expectedArrival)
+          if (timeUntilArrival < 10 || timeDiff < 15) continue
+          cancelScheduled(existing.eventId)
+          scheduled.current.delete(stableKey)
+          console.log(`[+${Math.round(arrivalSeconds)}s ↺] ${station.stationName} · ${pred.lineName}  ${lineConfig.note}  (was ${Math.round(timeUntilArrival)}s)`)
+        } else {
+          console.log(`[+${Math.round(arrivalSeconds)}s] ${station.stationName} · ${pred.lineName}  ${lineConfig.note}`)
+        }
 
         const eventId = scheduleArrival(lineConfig, arrivalTime, () => {
           triggerDisplay(station.stationName, pred.lineName)
-          scheduled.current.delete(pred.id)
+          scheduled.current.delete(stableKey)
         })
 
-        scheduled.current.set(pred.id, {
+        scheduled.current.set(stableKey, {
           predictionId: pred.id,
           eventId,
           stationName: station.stationName,

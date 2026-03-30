@@ -9,13 +9,24 @@ const synthFactories: Record<string, () => Tone.Synth<Tone.SynthOptions> | Tone.
   MembraneSynth: () => new Tone.MembraneSynth(),
 }
 
+let reverb: Tone.Reverb | null = null
+
+function getReverb(): Tone.Reverb {
+  if (!reverb) {
+    const limiter = new Tone.Limiter(-4).toDestination()
+    reverb = new Tone.Reverb({ decay: 4, preDelay: 0.02, wet: 0.45 }).connect(limiter)
+    reverb.generate()
+  }
+  return reverb
+}
+
 export function scheduleArrival(
   config: LineSoundConfig,
   arrivalTime: number,
   onTrigger: () => void
 ): number {
   const factory = synthFactories[config.synth] ?? synthFactories.Synth
-  const synth = factory().toDestination()
+  const synth = factory().connect(getReverb())
   synth.volume.value = config.volume
 
   const id = Tone.getTransport().schedule((time) => {
