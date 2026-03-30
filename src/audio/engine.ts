@@ -4,7 +4,7 @@ import type { ResolvedLineSoundConfig } from '../config/types'
 const RELEASE = 2.5
 const FADEOUT_S = 0.05
 
-const envelope = { attack: 0.02, decay: 0.3, sustain: 0.5, release: RELEASE }
+const envelope = { attack: 0.05, decay: 0.3, sustain: 0.5, release: RELEASE }
 
 const synthFactories: Record<string, () => Tone.Synth<Tone.SynthOptions> | Tone.FMSynth | Tone.AMSynth> = {
   Synth:    () => new Tone.Synth({ envelope }),

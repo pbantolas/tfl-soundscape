@@ -19,13 +19,15 @@ function App() {
 
       <div className="min-h-16 flex flex-col items-center justify-center gap-2">
         {displayItems.map(item => (
-          <p
+          <div
             key={item.id}
-            className="text-3xl font-bold text-white/60 tracking-widest uppercase font-pixel transition-opacity duration-700"
+            className="px-6 py-3 bg-neutral-900 rounded transition-opacity duration-700"
             style={{ opacity: item.visible ? 1 : 0 }}
           >
-            {item.stationName} — {item.lineName}
-          </p>
+            <p className="text-2xl font-bold text-white/80 tracking-widest uppercase font-pixel">
+              {item.stationName} — {item.lineName}
+            </p>
+          </div>
         ))}
       </div>
 
