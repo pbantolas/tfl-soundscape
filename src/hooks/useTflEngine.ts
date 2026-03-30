@@ -48,9 +48,6 @@ export function useTflEngine() {
           if (timeUntilArrival < 10 || timeDiff < 15) continue
           cancelScheduled(existing.eventId)
           scheduled.current.delete(stableKey)
-          console.log(`[+${Math.round(arrivalSeconds)}s ↺] ${station.stationName} · ${pred.lineName}  ${lineConfig.note}  (was ${Math.round(timeUntilArrival)}s)`)
-        } else {
-          console.log(`[+${Math.round(arrivalSeconds)}s] ${station.stationName} · ${pred.lineName}  ${lineConfig.note}`)
         }
 
         const eventId = scheduleArrival(lineConfig, arrivalTime, () => {
@@ -75,6 +72,20 @@ export function useTflEngine() {
           scheduled.current.delete(key)
         }
       }
+
+      const next5 = [...scheduled.current.values()]
+        .sort((a, b) => a.expectedArrival - b.expectedArrival)
+        .slice(0, 5)
+
+      console.log(
+        next5.length > 0
+          ? `Next ${next5.length} events:\n` +
+            next5.map((e) => {
+              const delta = e.expectedArrival - Tone.now()
+              return `  +${Math.round(delta)}s  ${e.stationName} · ${e.lineName}`
+            }).join('\n')
+          : 'No upcoming events'
+      )
     } catch (err) {
       console.error(`Poll error for ${station.stationName}:`, err)
     }

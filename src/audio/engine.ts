@@ -1,12 +1,14 @@
 import * as Tone from 'tone'
 import type { LineSoundConfig } from '../config/types'
 
-const synthFactories: Record<string, () => Tone.Synth<Tone.SynthOptions> | Tone.FMSynth | Tone.AMSynth | Tone.MonoSynth | Tone.MembraneSynth> = {
-  Synth: () => new Tone.Synth(),
-  FMSynth: () => new Tone.FMSynth(),
-  AMSynth: () => new Tone.AMSynth(),
-  MonoSynth: () => new Tone.MonoSynth(),
-  MembraneSynth: () => new Tone.MembraneSynth(),
+const RELEASE = 2.5
+
+const envelope = { attack: 0.02, decay: 0.3, sustain: 0.5, release: RELEASE }
+
+const synthFactories: Record<string, () => Tone.Synth<Tone.SynthOptions> | Tone.FMSynth | Tone.AMSynth> = {
+  Synth:    () => new Tone.Synth({ envelope }),
+  FMSynth:  () => new Tone.FMSynth({ envelope }),
+  AMSynth:  () => new Tone.AMSynth({ envelope }),
 }
 
 let reverb: Tone.Reverb | null = null
@@ -33,7 +35,7 @@ export function scheduleArrival(
     synth.triggerAttackRelease(config.note, config.duration, time)
     onTrigger()
 
-    const disposeDelay = Tone.Time(config.duration).toSeconds() + 0.1
+    const disposeDelay = Tone.Time(config.duration).toSeconds() + RELEASE + 0.5
     setTimeout(() => synth.dispose(), disposeDelay * 1000)
   }, arrivalTime)
 
