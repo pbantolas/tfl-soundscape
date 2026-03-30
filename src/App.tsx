@@ -1,7 +1,8 @@
 import { useTflEngine } from './hooks/useTflEngine'
+import { Scrubber } from './components/Scrubber'
 
 function App() {
-  const { running, display, start, stop } = useTflEngine()
+  const { running, display, start, stop, isLive, scrubMs, timelineStartMs, timelineEndMs, allEvents, seek, seekAndPlay, goLive } = useTflEngine()
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-12 bg-neutral-950 text-white">
@@ -26,6 +27,19 @@ function App() {
           </p>
         )}
       </div>
+
+      {running && timelineEndMs > 0 && (
+        <Scrubber
+          scrubMs={scrubMs}
+          timelineStartMs={timelineStartMs}
+          timelineEndMs={timelineEndMs}
+          allEvents={allEvents}
+          isLive={isLive}
+          onSeek={seek}
+          onSeekEnd={seekAndPlay}
+          onGoLive={goLive}
+        />
+      )}
     </div>
   )
 }

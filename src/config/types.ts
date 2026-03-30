@@ -42,4 +42,14 @@ export interface ScheduledArrival {
   lineName: string
   expectedArrival: number
   scheduledAt: number
+  realWorldMs: number
+  lineConfig: LineSoundConfig
+}
+
+export interface TimelineEvent {
+  key: string
+  stationName: string
+  lineName: string
+  realWorldMs: number
+  lineConfig: LineSoundConfig
 }
