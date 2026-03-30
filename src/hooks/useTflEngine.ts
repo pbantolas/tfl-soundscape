@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Tone from 'tone'
 import { fetchArrivals } from '../api/tfl'
-import { scheduleArrival, cancelScheduled, cancelAll, disposeEffects, playNow } from '../audio/engine'
+import { scheduleArrival, cancelScheduled, cancelAll, disposeEffects, playNow, preloadSampler } from '../audio/engine'
 import { resolveLineSoundConfig } from '../config/tonality'
 import type { AppSoundConfig, ScheduledArrival, StationSoundConfig, TimelineEvent } from '../config/types'
 import stationsConfig from '../config/stations.json'
@@ -10,7 +10,10 @@ const { stations, tonality } = stationsConfig as unknown as AppSoundConfig
 const POLL_WINDOW_MS = 30_000
 const DISPLAY_DURATION_MS = 3000
 const FADE_DURATION_MS = 700
-const AUTO_PLAYBACK_RATE = 16
+const AUTO_PLAYBACK_RATE = 32
+const configuredEngines = new Set(
+  stations.flatMap((station) => Object.values(station.lines).map((line) => line.synth)),
+)
 
 type PlaybackMode = 'live' | 'scrub' | 'autoPingPong'
 
@@ -208,6 +211,7 @@ export function useTflEngine() {
 
   const start = useCallback(async () => {
     await Tone.start()
+    await Promise.all([...configuredEngines].map((engine) => preloadSampler(engine)))
     Tone.getTransport().start()
     runningRef.current = true
     appStartMsRef.current = Date.now()

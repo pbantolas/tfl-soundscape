@@ -3,23 +3,41 @@ import type { ResolvedLineSoundConfig } from '../config/types'
 
 const RELEASE = 2.5
 const FADEOUT_S = 0.05
+const PIANO_RELEASE = 1.8
 
-const envelope = { attack: 0.05, decay: 0.3, sustain: 0.5, release: RELEASE }
+const pianoSampleUrls = {
+  E2: 'E2.mp3',
+  G2: 'G2.mp3',
+  B2: 'B2.mp3',
+  D3: 'D3.mp3',
+  F3: 'F3.mp3',
+  A3: 'A3.mp3',
+  C4: 'C4.mp3',
+  E4: 'E4.mp3',
+  G4: 'G4.mp3',
+  B4: 'B4.mp3',
+} as const
 
-const synthFactories: Record<string, () => Tone.Synth<Tone.SynthOptions> | Tone.FMSynth | Tone.AMSynth> = {
-  Synth:    () => new Tone.Synth({ envelope }),
-  FMSynth:  () => new Tone.FMSynth({ envelope }),
-  AMSynth:  () => new Tone.AMSynth({ envelope }),
+const duoVoice = {
+  oscillator: { type: 'triangle' as const },
+  envelope: { attack: 0.4, decay: 0.3, sustain: 0.7, release: RELEASE },
+  filter: { Q: 1, type: 'lowpass' as const, rolloff: -12 as const },
+  filterEnvelope: { attack: 0.5, baseFrequency: 600, exponent: 2, decay: 0.3, sustain: 0.7, release: RELEASE },
+}
+
+const synthFactories: Record<string, () => Tone.DuoSynth | Tone.PluckSynth> = {
+  DuoSynth:   () => new Tone.DuoSynth({ harmonicity: 1.005, vibratoRate: 0.4, vibratoAmount: 0.08, voice0: duoVoice, voice1: duoVoice }),
+  PluckSynth: () => new Tone.PluckSynth({ attackNoise: 1, dampening: 3500, resonance: 0.97 }),
 }
 
 const maxVoicesBySynth = {
-  Synth: 12,
-  FMSynth: 8,
-  AMSynth: 8,
+  DuoSynth: 8,
+  PluckSynth: 10,
 } as const
 
 type SynthKind = keyof typeof maxVoicesBySynth
-type SynthVoice = Tone.Synth<Tone.SynthOptions> | Tone.FMSynth | Tone.AMSynth
+type SynthVoice = Tone.DuoSynth | Tone.PluckSynth
+type EngineKind = SynthKind | 'PianoSampler'
 
 interface VoiceSlot {
   kind: SynthKind
@@ -32,8 +50,19 @@ interface VoiceSlot {
 }
 
 interface ActiveEventHandle {
+  kind: 'synth' | 'sampler'
+}
+
+interface ActiveSynthEventHandle extends ActiveEventHandle {
+  kind: 'synth'
   slot: VoiceSlot
   token: number
+}
+
+interface ActiveSamplerEventHandle extends ActiveEventHandle {
+  kind: 'sampler'
+  note: string
+  idleTimer: ReturnType<typeof setTimeout> | null
 }
 
 type EngineEvent = {
@@ -44,9 +73,13 @@ type EngineEvent = {
 type ShouldTrigger = () => boolean
 
 let reverb: Tone.Reverb | null = null
+let filter: Tone.Filter | null = null
 let limiter: Tone.Limiter | null = null
+let pianoSampler: Tone.Sampler | null = null
+let pianoSamplerLoadPromise: Promise<Tone.Sampler> | null = null
+let pianoSamplerLoadVersion = 0
 const voicePools = new Map<SynthKind, VoiceSlot[]>()
-const activeEvents = new Map<number, ActiveEventHandle>()
+const activeEvents = new Map<number, ActiveSynthEventHandle | ActiveSamplerEventHandle>()
 
 let _lastCtxState = ''
 
@@ -58,7 +91,7 @@ function checkCtxState() {
   }
 }
 
-function getReverb(): Tone.Reverb {
+function getFilter(): Tone.Filter {
   checkCtxState()
   if (!limiter) {
     limiter = new Tone.Limiter(-4).toDestination()
@@ -67,7 +100,46 @@ function getReverb(): Tone.Reverb {
     reverb = new Tone.Reverb({ decay: 4, preDelay: 0.02, wet: 0.45 }).connect(limiter)
     reverb.generate()
   }
-  return reverb
+  if (!filter) {
+    filter = new Tone.Filter({ frequency: 3000, type: 'lowpass', rolloff: -12 }).connect(reverb)
+  }
+  return filter
+}
+
+function createPianoSampler(): Promise<Tone.Sampler> {
+  if (pianoSampler) return Promise.resolve(pianoSampler)
+  if (pianoSamplerLoadPromise) return pianoSamplerLoadPromise
+
+  const loadVersion = ++pianoSamplerLoadVersion
+  pianoSamplerLoadPromise = new Promise((resolve) => {
+    const sampler = new Tone.Sampler({
+      urls: pianoSampleUrls,
+      baseUrl: '/samples/piano/',
+      release: PIANO_RELEASE,
+      attack: 0,
+      onload: () => {
+        if (loadVersion !== pianoSamplerLoadVersion) {
+          sampler.dispose()
+          resolve(sampler)
+          return
+        }
+        pianoSampler = sampler
+        pianoSamplerLoadPromise = null
+        resolve(sampler)
+      },
+    }).connect(getFilter())
+  })
+
+  return pianoSamplerLoadPromise
+}
+
+function getLoadedPianoSampler(): Tone.Sampler | null {
+  return pianoSampler?.loaded ? pianoSampler : null
+}
+
+export function preloadSampler(engine: string): Promise<void> {
+  if (engine !== 'PianoSampler') return Promise.resolve()
+  return createPianoSampler().then(() => undefined)
 }
 
 // Transport event IDs that haven't fired yet (no voice lease exists)
@@ -75,7 +147,11 @@ const pendingIds = new Set<number>()
 const previewIds: number[] = []
 
 function normalizeSynthKind(synth: string): SynthKind {
-  return synth in synthFactories ? synth as SynthKind : 'Synth'
+  return synth in synthFactories ? synth as SynthKind : 'DuoSynth'
+}
+
+function getEngineKind(engine: string): EngineKind {
+  return engine === 'PianoSampler' ? 'PianoSampler' : normalizeSynthKind(engine)
 }
 
 function getPool(kind: SynthKind): VoiceSlot[] {
@@ -88,7 +164,7 @@ function getPool(kind: SynthKind): VoiceSlot[] {
 }
 
 function createVoiceSlot(kind: SynthKind): VoiceSlot {
-  const synth = synthFactories[kind]().connect(getReverb())
+  const synth = synthFactories[kind]().connect(getFilter())
   return {
     kind,
     synth,
@@ -162,7 +238,7 @@ function scheduleVoiceIdle(id: number, slot: VoiceSlot, token: number, delaySeco
   slot.busyUntil = Tone.now() + delaySeconds
   slot.idleTimer = setTimeout(() => {
     const handle = activeEvents.get(id)
-    if (handle?.token === token) {
+    if (handle?.kind === 'synth' && handle.token === token) {
       activeEvents.delete(id)
     }
     if (slot.token !== token) return
@@ -173,9 +249,18 @@ function scheduleVoiceIdle(id: number, slot: VoiceSlot, token: number, delaySeco
   }, delaySeconds * 1000)
 }
 
-function releaseActiveEvent(id: number, handle: ActiveEventHandle) {
+function releaseActiveEvent(id: number, handle: ActiveSynthEventHandle | ActiveSamplerEventHandle) {
   activeEvents.delete(id)
   clearPreviewId(id)
+
+  if (handle.kind === 'sampler') {
+    if (handle.idleTimer) {
+      clearTimeout(handle.idleTimer)
+      handle.idleTimer = null
+    }
+    pianoSampler?.triggerRelease(handle.note, Tone.now())
+    return
+  }
 
   const { slot, token } = handle
   if (slot.token !== token) return
@@ -196,6 +281,37 @@ function prepareVoiceForNote(synth: SynthVoice, volume: number, time: number) {
   synth.volume.setValueAtTime(volume, time)
 }
 
+function triggerPianoSamplerNote(config: ResolvedLineSoundConfig, triggerTime: number) {
+  const sampler = getLoadedPianoSampler()
+  if (!sampler) {
+    void createPianoSampler()
+    return false
+  }
+
+  sampler.volume.cancelScheduledValues(triggerTime)
+  sampler.volume.setValueAtTime(config.volume, triggerTime)
+  sampler.triggerAttackRelease(config.note, config.duration, triggerTime)
+  return true
+}
+
+function scheduleSamplerEventIdle(id: number, note: string, delaySeconds: number) {
+  const handle: ActiveSamplerEventHandle = {
+    kind: 'sampler',
+    note,
+    idleTimer: null,
+  }
+
+  handle.idleTimer = setTimeout(() => {
+    const active = activeEvents.get(id)
+    if (active !== handle) return
+    activeEvents.delete(id)
+    handle.idleTimer = null
+    clearPreviewId(id)
+  }, delaySeconds * 1000)
+
+  activeEvents.set(id, handle)
+}
+
 function scheduleEvent(event: EngineEvent, time: number, onTrigger: () => void, shouldTrigger: ShouldTrigger = () => true): number {
   const id = Tone.getTransport().schedule((triggerTime) => {
     pendingIds.delete(id)
@@ -205,7 +321,16 @@ function scheduleEvent(event: EngineEvent, time: number, onTrigger: () => void, 
     if (event.kind !== 'note') return
 
     const { config } = event
-    const kind = normalizeSynthKind(config.synth)
+    const engine = getEngineKind(config.synth)
+    if (engine === 'PianoSampler') {
+      if (!triggerPianoSamplerNote(config, triggerTime)) return
+      const releaseDelay = Tone.Time(config.duration).toSeconds() + PIANO_RELEASE + 0.1
+      scheduleSamplerEventIdle(id, config.note, releaseDelay)
+      onTrigger()
+      return
+    }
+
+    const kind = engine
     const slot = acquireVoice(kind)
     const token = slot.token + 1
     slot.token = token
@@ -215,7 +340,7 @@ function scheduleEvent(event: EngineEvent, time: number, onTrigger: () => void, 
     prepareVoiceForNote(slot.synth, config.volume, triggerTime)
     slot.synth.triggerAttackRelease(config.note, config.duration, triggerTime)
 
-    activeEvents.set(id, { slot, token })
+    activeEvents.set(id, { kind: 'synth', slot, token })
     onTrigger()
 
     const releaseDelay = Tone.Time(config.duration).toSeconds() + RELEASE + 0.5
@@ -285,6 +410,7 @@ export function cancelAll() {
     releaseActiveEvent(id, handle)
   }
   activeEvents.clear()
+  pianoSampler?.releaseAll(Tone.now())
   previewIds.length = 0
 }
 
@@ -297,6 +423,16 @@ export function disposeEffects() {
     }
   }
   voicePools.clear()
+  if (pianoSampler) {
+    pianoSampler.dispose()
+    pianoSampler = null
+  }
+  pianoSamplerLoadVersion += 1
+  pianoSamplerLoadPromise = null
+  if (filter) {
+    filter.dispose()
+    filter = null
+  }
   if (reverb) {
     reverb.dispose()
     reverb = null
