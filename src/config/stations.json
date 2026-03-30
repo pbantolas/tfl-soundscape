@@ -1,0 +1,11 @@
+[
+  {
+    "stationId": "940GZZLUOXC",
+    "stationName": "Oxford Circus",
+    "lines": {
+      "victoria": { "synth": "FMSynth", "note": "C3", "duration": "4n", "volume": -12 },
+      "central": { "synth": "Synth", "note": "E4", "duration": "8n", "volume": -10 },
+      "bakerloo": { "synth": "AMSynth", "note": "G2", "duration": "4n", "volume": -14 }
+    }
+  }
+]
