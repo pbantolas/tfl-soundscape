@@ -12,15 +12,20 @@ const synthFactories: Record<string, () => Tone.Synth<Tone.SynthOptions> | Tone.
 }
 
 let reverb: Tone.Reverb | null = null
+let limiter: Tone.Limiter | null = null
 
 function getReverb(): Tone.Reverb {
+  if (!limiter) {
+    limiter = new Tone.Limiter(-4).toDestination()
+  }
   if (!reverb) {
-    const limiter = new Tone.Limiter(-4).toDestination()
     reverb = new Tone.Reverb({ decay: 4, preDelay: 0.02, wet: 0.45 }).connect(limiter)
     reverb.generate()
   }
   return reverb
 }
+
+let activeSynths = new Map<number, Tone.Synth | Tone.FMSynth | Tone.AMSynth>()
 
 export function scheduleArrival(
   config: LineSoundConfig,
@@ -36,12 +41,21 @@ export function scheduleArrival(
     onTrigger()
 
     const disposeDelay = Tone.Time(config.duration).toSeconds() + RELEASE + 0.5
-    setTimeout(() => synth.dispose(), disposeDelay * 1000)
+    setTimeout(() => {
+      synth.dispose()
+      activeSynths.delete(id)
+    }, disposeDelay * 1000)
   }, arrivalTime)
 
+  activeSynths.set(id, synth)
   return id
 }
 
 export function cancelScheduled(id: number) {
   Tone.getTransport().clear(id)
+  const synth = activeSynths.get(id)
+  if (synth) {
+    synth.dispose()
+    activeSynths.delete(id)
+  }
 }
