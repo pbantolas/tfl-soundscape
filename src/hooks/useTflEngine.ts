@@ -2,12 +2,21 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Tone from 'tone'
 import { fetchArrivals } from '../api/tfl'
 import { scheduleArrival, cancelScheduled, cancelAll, disposeEffects, playNow } from '../audio/engine'
-import type { StationSoundConfig, ScheduledArrival, TimelineEvent } from '../config/types'
+import { resolveLineSoundConfig } from '../config/tonality'
+import type { AppSoundConfig, ScheduledArrival, StationSoundConfig, TimelineEvent } from '../config/types'
 import stationsConfig from '../config/stations.json'
 
-const stations = stationsConfig as unknown as StationSoundConfig[]
+const { stations, tonality } = stationsConfig as unknown as AppSoundConfig
 const POLL_WINDOW_MS = 30_000
 const DISPLAY_DURATION_MS = 3000
+const FADE_DURATION_MS = 700
+
+interface DisplayItem {
+  id: string
+  stationName: string
+  lineName: string
+  visible: boolean
+}
 
 function findNearest(events: TimelineEvent[], ms: number): TimelineEvent | null {
   if (events.length === 0) return null
@@ -18,25 +27,37 @@ function findNearest(events: TimelineEvent[], ms: number): TimelineEvent | null 
 
 export function useTflEngine() {
   const [running, setRunning] = useState(false)
-  const [display, setDisplay] = useState<{ stationName: string; lineName: string } | null>(null)
+  const [displayItems, setDisplayItems] = useState<DisplayItem[]>([])
   const [isLive, setIsLive] = useState(true)
   const [scrubMs, setScrubMs] = useState(0)
+  const [timelineStartMs, setTimelineStartMs] = useState(0)
   const [timelineEndMs, setTimelineEndMs] = useState(0)
+  const [allEvents, setAllEvents] = useState<TimelineEvent[]>([])
 
   const scheduled = useRef(new Map<string, ScheduledArrival>())
   const allEventsRef = useRef<TimelineEvent[]>([])
   const appStartMsRef = useRef(0)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const displayTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>())
   const runningRef = useRef(false)
   const isLiveRef = useRef(true)
   const lastPlayedKeyRef = useRef<string | null>(null)
 
   const triggerDisplay = useCallback((stationName: string, lineName: string) => {
     if (!isLiveRef.current) return
-    setDisplay({ stationName, lineName })
-    if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current)
-    fadeTimerRef.current = setTimeout(() => setDisplay(null), DISPLAY_DURATION_MS)
+    const id = `${stationName}-${lineName}-${Date.now()}`
+    setDisplayItems(prev => [...prev, { id, stationName, lineName, visible: true }])
+
+    const fadeOut = setTimeout(() => {
+      displayTimersRef.current.delete(fadeOut)
+      setDisplayItems(prev => prev.map(item => item.id === id ? { ...item, visible: false } : item))
+      const remove = setTimeout(() => {
+        displayTimersRef.current.delete(remove)
+        setDisplayItems(prev => prev.filter(item => item.id !== id))
+      }, FADE_DURATION_MS)
+      displayTimersRef.current.add(remove)
+    }, DISPLAY_DURATION_MS)
+    displayTimersRef.current.add(fadeOut)
   }, [])
 
   const pollStation = useCallback(async (station: StationSoundConfig) => {
@@ -46,6 +67,7 @@ export function useTflEngine() {
       if (!runningRef.current) return
 
       const now = Tone.now()
+      let eventsChanged = false
 
       for (const pred of predictions) {
         const lineConfig = station.lines[pred.lineId]
@@ -67,7 +89,9 @@ export function useTflEngine() {
           scheduled.current.delete(stableKey)
         }
 
-        const eventId = scheduleArrival(lineConfig, arrivalTime, () => {
+        const resolvedConfig = resolveLineSoundConfig(lineConfig, tonality)
+
+        const eventId = scheduleArrival(resolvedConfig, arrivalTime, () => {
           triggerDisplay(station.stationName, pred.lineName)
           scheduled.current.delete(stableKey)
         })
@@ -103,8 +127,13 @@ export function useTflEngine() {
             allEventsRef.current.splice(insertIdx, 0, newEvent)
           }
         }
+        eventsChanged = true
 
         setTimelineEndMs(prev => Math.max(prev, realWorldMs))
+      }
+
+      if (eventsChanged) {
+        setAllEvents([...allEventsRef.current])
       }
 
       const transportNow = Tone.now()
@@ -138,6 +167,7 @@ export function useTflEngine() {
     Tone.getTransport().start()
     runningRef.current = true
     appStartMsRef.current = Date.now()
+    setTimelineStartMs(appStartMsRef.current)
     setScrubMs(Date.now())
     setRunning(true)
 
@@ -163,20 +193,20 @@ export function useTflEngine() {
       clearInterval(intervalRef.current)
       intervalRef.current = null
     }
-    if (fadeTimerRef.current) {
-      clearTimeout(fadeTimerRef.current)
-      fadeTimerRef.current = null
-    }
+    displayTimersRef.current.forEach(t => clearTimeout(t))
+    displayTimersRef.current.clear()
 
     cancelAll()
     scheduled.current.clear()
     allEventsRef.current = []
+    setAllEvents([])
+    setTimelineStartMs(0)
     setTimelineEndMs(0)
 
     Tone.getTransport().stop()
     Tone.getTransport().cancel()
     setRunning(false)
-    setDisplay(null)
+    setDisplayItems([])
   }, [])
 
   // Live-time ticker: advance scrubMs to Date.now() every 500ms when in live mode
@@ -192,11 +222,10 @@ export function useTflEngine() {
     setScrubMs(ms)
     const nearest = findNearest(allEventsRef.current, ms)
     if (nearest) {
-      setDisplay({ stationName: nearest.stationName, lineName: nearest.lineName })
-      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current)
+      setDisplayItems([{ id: 'seek', stationName: nearest.stationName, lineName: nearest.lineName, visible: true }])
       if (nearest.key !== lastPlayedKeyRef.current) {
         lastPlayedKeyRef.current = nearest.key
-        playNow(nearest.lineConfig)
+        playNow(resolveLineSoundConfig(nearest.lineConfig, tonality))
       }
     }
   }, [])
@@ -208,22 +237,23 @@ export function useTflEngine() {
     setIsLive(true)
     setScrubMs(Date.now())
     lastPlayedKeyRef.current = null
-    setDisplay(null)
+    setDisplayItems([])
   }, [])
 
   useEffect(() => {
+    const displayTimers = displayTimersRef.current
+    const scheduledEvents = scheduled.current
+
     return () => {
       runningRef.current = false
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
-      if (fadeTimerRef.current) {
-        clearTimeout(fadeTimerRef.current)
-        fadeTimerRef.current = null
-      }
+      displayTimers.forEach(t => clearTimeout(t))
+      displayTimers.clear()
       cancelAll()
-      scheduled.current.clear()
+      scheduledEvents.clear()
       Tone.getTransport().stop()
       Tone.getTransport().cancel()
       disposeEffects()
@@ -232,14 +262,14 @@ export function useTflEngine() {
 
   return {
     running,
-    display,
+    displayItems,
     start,
     stop,
     isLive,
     scrubMs,
-    timelineStartMs: appStartMsRef.current,
+    timelineStartMs,
     timelineEndMs,
-    allEvents: allEventsRef.current,
+    allEvents,
     seek,
     seekAndPlay,
     goLive,

@@ -29,7 +29,7 @@ export function Scrubber({
 }: ScrubberProps) {
   const barRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
-  const [nowMs, setNowMs] = useState(Date.now())
+  const [nowMs, setNowMs] = useState(() => Date.now())
 
   // Keep a live "now" indicator when in scrub mode
   useEffect(() => {

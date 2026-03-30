@@ -1,5 +1,5 @@
 import * as Tone from 'tone'
-import type { LineSoundConfig } from '../config/types'
+import type { ResolvedLineSoundConfig } from '../config/types'
 
 const RELEASE = 2.5
 const FADEOUT_S = 0.05
@@ -38,7 +38,7 @@ interface ActiveEventHandle {
 
 type EngineEvent = {
   kind: 'note'
-  config: LineSoundConfig
+  config: ResolvedLineSoundConfig
 }
 
 let reverb: Tone.Reverb | null = null
@@ -69,7 +69,7 @@ function getReverb(): Tone.Reverb {
 }
 
 // Transport event IDs that haven't fired yet (no voice lease exists)
-let pendingIds = new Set<number>()
+const pendingIds = new Set<number>()
 const previewIds: number[] = []
 
 function normalizeSynthKind(synth: string): SynthKind {
@@ -253,7 +253,7 @@ function debugAudio(label: string, extra?: Record<string, unknown>) {
 }
 
 export function scheduleArrival(
-  config: LineSoundConfig,
+  config: ResolvedLineSoundConfig,
   arrivalTime: number,
   onTrigger: () => void
 ): number {
@@ -304,7 +304,7 @@ export function disposeEffects() {
 
 const MAX_PREVIEWS = 10
 
-export function playNow(config: LineSoundConfig): void {
+export function playNow(config: ResolvedLineSoundConfig): void {
   debugAudio('playNow', { note: config.note, synth: config.synth })
   trimPreviewIds()
   while (activePreviewCount() >= MAX_PREVIEWS && previewIds.length > 0) {

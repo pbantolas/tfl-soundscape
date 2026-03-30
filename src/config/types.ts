@@ -1,8 +1,26 @@
 export interface LineSoundConfig {
   synth: string
+  degree: number
+  octave: number
+  duration: string
+  volume: number
+}
+
+export interface ResolvedLineSoundConfig {
+  synth: string
   note: string
   duration: string
   volume: number
+}
+
+export interface TonalityConfig {
+  root: string
+  mode: 'major' | 'dorian' | 'mixolydian'
+}
+
+export interface AppSoundConfig {
+  tonality: TonalityConfig
+  stations: StationSoundConfig[]
 }
 
 export interface StationSoundConfig {
