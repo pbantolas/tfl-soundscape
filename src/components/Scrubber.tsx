@@ -148,32 +148,29 @@ export function Scrubber({
       {/* Timeline bar */}
       <div
         ref={barRef}
-        className="relative h-0.5 bg-white/10 rounded-full cursor-pointer"
+        className="relative h-10 bg-white/5 rounded cursor-pointer overflow-hidden"
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
       >
-        {/* Hit area */}
-        <div className="absolute -inset-y-3 left-0 right-0" />
+        {/* Filled track up to scrub position */}
+        <div
+          className="absolute left-0 top-0 h-full bg-white/8"
+          style={{ width: `${thumbPercent}%` }}
+        />
 
         {/* Event markers */}
         {markerEvents.map(e => (
           <div
             key={e.key}
-            className="absolute top-1/2 -translate-y-1/2 w-0.5 h-0.5 rounded-full bg-white/30"
+            className="absolute top-0 w-px h-full bg-white/20"
             style={{ left: `${toPercent(e.realWorldMs, timelineStartMs, timelineEndMs)}%` }}
           />
         ))}
 
-        {/* Filled track up to scrub position */}
-        <div
-          className="absolute left-0 top-0 h-full rounded-full bg-white/20"
-          style={{ width: `${thumbPercent}%` }}
-        />
-
         {/* Frozen loop end while auto mode is active */}
         {isAutoPingPong && loopEndMs > timelineStartMs && (
           <div
-            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-px h-4 bg-cyan-300/90"
+            className="absolute top-0 -translate-x-1/2 w-px h-full bg-cyan-300/90"
             style={{ left: `${loopEndPercent}%` }}
           />
         )}
@@ -181,14 +178,14 @@ export function Scrubber({
         {/* "Now" indicator — only visible in scrub mode */}
         {!isLive && (
           <div
-            className="absolute top-1/2 -translate-y-1/2 w-px h-3 bg-red-500/60"
+            className="absolute top-0 w-px h-full bg-red-500/50"
             style={{ left: `${nowPercent}%` }}
           />
         )}
 
-        {/* Scrub thumb */}
+        {/* Scrub thumb — vertical line */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white shadow-md"
+          className="absolute top-0 -translate-x-1/2 w-0.5 h-full bg-white shadow-md"
           style={{ left: `${thumbPercent}%` }}
         />
       </div>
