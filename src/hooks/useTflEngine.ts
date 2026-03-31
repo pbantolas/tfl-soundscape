@@ -454,7 +454,7 @@ export function useTflEngine() {
         endMs,
         autoPlayhead: autoPlayheadMsRef.current,
         previewCursor: previewCursorMsRef.current ?? 'null',
-        scrubMs,
+        scrubMs: previewCursorMsRef.current ?? 'null',
       })
       pendingLoopStartMsRef.current = startMs
       pendingLoopEndMsRef.current = Math.max(pendingLoopEndMsRef.current, endMs)
@@ -467,7 +467,7 @@ export function useTflEngine() {
         endMs,
         autoPlayheadBefore: autoPlayheadMsRef.current,
         previewCursorBefore: previewCursorMsRef.current ?? 'null',
-        scrubMsBefore: scrubMs,
+        scrubMsBefore: previewCursorMsRef.current ?? 'null',
       })
       autoPlayheadMsRef.current = startMs
       previewCursorMsRef.current = startMs
@@ -479,7 +479,7 @@ export function useTflEngine() {
       autoPlayheadMsRef.current = startMs
       previewCursorMsRef.current = startMs || null
     }
-  }, [scrubMs])
+  }, [])
 
   const previewAt = useCallback((ms: number, options?: { resetCursor?: boolean }) => {
     const previousMs = options?.resetCursor ? null : previewCursorMsRef.current
@@ -619,7 +619,6 @@ export function useTflEngine() {
     clearAllDisplayTimers()
     cancelAll()
     stopBedLoop()
-    resetLineStates()
     playbackOriginMsRef.current = null
     playbackStartedAtPerfMsRef.current = null
     transportStartSecondsRef.current = null
@@ -640,7 +639,7 @@ export function useTflEngine() {
     displayItemsRef.current = []
     setDisplayItems([])
     setScrubMs(stoppedAtMs)
-  }, [clearAllDisplayTimers, getCurrentPlaybackPositionMs, resetLineStates, setMode, stopAutoPlayback, stopBedLoop, stopLivePlayhead, timelineStartMs])
+  }, [clearAllDisplayTimers, getCurrentPlaybackPositionMs, setMode, stopAutoPlayback, stopBedLoop, stopLivePlayhead, timelineStartMs])
 
   useEffect(() => {
     if (!running || !isLiveMode) {
@@ -739,6 +738,9 @@ export function useTflEngine() {
     const loopEnd = latestTimelineEndMsRef.current
     const loopSpan = loopEnd - loopStart
     if (loopSpan <= 0) return
+    const requestedStartMs = isValidTimelinePosition(previewCursorMsRef.current, loopStart, loopEnd)
+      ? previewCursorMsRef.current
+      : (runningRef.current ? getCurrentPlaybackPositionMs() : null)
 
     debugPlayback('auto-start-request', {
       rate,
@@ -755,6 +757,10 @@ export function useTflEngine() {
 
     await ensureAudioReady({ preload: true })
 
+    const startMs = isValidTimelinePosition(requestedStartMs, loopStart, loopEnd)
+      ? requestedStartMs
+      : loopStart
+
     runningRef.current = false
     stopAutoPlayback()
     stopLivePlayhead()
@@ -767,25 +773,36 @@ export function useTflEngine() {
     pendingLoopStartMsRef.current = loopStart
     pendingLoopEndMsRef.current = loopEnd
     autoDirectionRef.current = 1
-    autoPlayheadMsRef.current = loopStart
-    lastAutoTickMsRef.current = performance.now()
-    previewCursorMsRef.current = loopStart
+    autoPlayheadMsRef.current = startMs
+    lastAutoTickMsRef.current = 0
+    previewCursorMsRef.current = startMs
     setLoopStartMs(loopStart)
     setLoopEndMs(loopEnd)
-    startTransport(loopStart)
+    startTransport(startMs)
+    autoLoopStartMsRef.current = loopStart
+    autoLoopEndMsRef.current = loopEnd
+    pendingLoopStartMsRef.current = loopStart
+    pendingLoopEndMsRef.current = loopEnd
     debugPlayback('auto-start-applied', {
+      startMs,
       loopStart,
       loopEnd,
       scrubMs,
       previewCursor: previewCursorMsRef.current ?? 'null',
       autoPlayhead: autoPlayheadMsRef.current,
     })
-    previewAt(loopStart)
+    previewAt(startMs, { resetCursor: true })
 
     const tick = (frameNow: number) => {
       const activeLoopStart = autoLoopStartMsRef.current
       const activeLoopEnd = autoLoopEndMsRef.current
       if (activeLoopEnd <= activeLoopStart) {
+        autoPlayRef.current = requestAnimationFrame(tick)
+        return
+      }
+
+      if (lastAutoTickMsRef.current === 0) {
+        lastAutoTickMsRef.current = frameNow
         autoPlayRef.current = requestAnimationFrame(tick)
         return
       }
@@ -834,7 +851,7 @@ export function useTflEngine() {
     }
 
     autoPlayRef.current = requestAnimationFrame(tick)
-  }, [ensureAudioReady, flushEnergyDisplay, previewAt, setMode, startTransport, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
+  }, [ensureAudioReady, flushEnergyDisplay, getCurrentPlaybackPositionMs, previewAt, setMode, startTransport, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
 
   useEffect(() => {
     queuePollCycle()
