@@ -337,7 +337,6 @@ export function useTflEngine() {
 
     for (const event of events) {
       counts.set(event.lineId, (counts.get(event.lineId) ?? 0) + 1)
-      triggerDisplay(event.stationName, event.lineName, event.lineId, event.direction)
     }
 
     for (const [lineId, count] of counts) {
@@ -345,7 +344,7 @@ export function useTflEngine() {
       if (!state) continue
       state.energy = Math.min(1, state.energy + (ENERGY_BUMP * Math.log1p(count)))
     }
-  }, [decayAllLineEnergy, triggerDisplay])
+  }, [decayAllLineEnergy])
 
   const startBedLoop = useCallback(() => {
     stopBedLoop()
@@ -597,19 +596,30 @@ export function useTflEngine() {
 
     const tick = () => {
       const nowMs = getCurrentPlaybackPositionMs()
+      const previousMs = previewCursorMsRef.current
+
       setScrubMs(nowMs)
       autoPlayheadMsRef.current = nowMs
-      previewCursorMsRef.current = nowMs
-      if (audioReadyRef.current) {
-        const crossedEvents = findCrossedEvents(allEventsRef.current, nowMs - 250, nowMs)
+
+      if (audioReadyRef.current && previousMs !== null) {
+        const crossedEvents = findCrossedEvents(allEventsRef.current, previousMs, nowMs)
+        if (crossedEvents.length > 0) {
+          crossedEvents.forEach((event) => {
+            triggerDisplay(event.stationName, event.lineName, event.lineId, event.direction)
+          })
+        }
         applyEventEnergy(crossedEvents, nowMs)
+      } else if (audioReadyRef.current) {
+        decayAllLineEnergy(nowMs)
       }
+
+      previewCursorMsRef.current = nowMs
       livePlayheadRef.current = requestAnimationFrame(tick)
     }
 
     livePlayheadRef.current = requestAnimationFrame(tick)
     return () => stopLivePlayhead()
-  }, [applyEventEnergy, getCurrentPlaybackPositionMs, isLiveMode, running, stopLivePlayhead])
+  }, [applyEventEnergy, decayAllLineEnergy, getCurrentPlaybackPositionMs, isLiveMode, running, stopLivePlayhead, triggerDisplay])
 
   const seekStart = useCallback(async (ms: number) => {
     if (allEventsRef.current.length === 0) return
