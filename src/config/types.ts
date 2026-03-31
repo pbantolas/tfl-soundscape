@@ -66,6 +66,7 @@ export interface TimelineEvent {
   stationName: string
   lineId: string
   lineName: string
+  direction: string
   realWorldMs: number
   lineConfig: ResolvedLineSoundConfig
 }

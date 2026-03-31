@@ -28,6 +28,7 @@ interface DisplayItem {
   stationName: string
   lineName: string
   lineId: string
+  direction: string
   visible: boolean
 }
 
@@ -70,6 +71,7 @@ function toDisplayItem(event: TimelineEvent, suffix = ''): DisplayItem {
     stationName: event.stationName,
     lineName: event.lineName,
     lineId: event.lineId,
+    direction: event.direction,
     visible: true,
   }
 }
@@ -192,10 +194,10 @@ export function useTflEngine() {
     })
   }, [clearDisplayTimer])
 
-  const triggerDisplay = useCallback((stationName: string, lineName: string, lineId: string) => {
+  const triggerDisplay = useCallback((stationName: string, lineName: string, lineId: string, direction: string) => {
     if (playbackModeRef.current !== 'live') return
     const id = `display-${displayIdRef.current++}`
-    appendDisplayItems([{ id, stationName, lineName, lineId, visible: true }])
+    appendDisplayItems([{ id, stationName, lineName, lineId, direction, visible: true }])
 
     const fadeOut = setTimeout(() => {
       const timers = displayTimersRef.current.get(id)
@@ -270,7 +272,7 @@ export function useTflEngine() {
         event.lineConfig,
         arrivalTime,
         () => {
-          triggerDisplay(event.stationName, event.lineName, event.lineId)
+          triggerDisplay(event.stationName, event.lineName, event.lineId, event.direction)
           scheduled.current.delete(event.key)
         },
         () => playbackModeRef.current === 'live',
@@ -423,6 +425,7 @@ export function useTflEngine() {
           stationName: formatStationName(prediction.stationName),
           lineId,
           lineName: prediction.lineName,
+          direction: prediction.direction,
           realWorldMs: fetchedAtMs + (prediction.timeToStation * 1000),
           lineConfig: existingEvent?.lineConfig ?? resolveLineSoundConfig(lineConfig, tonality),
         }]

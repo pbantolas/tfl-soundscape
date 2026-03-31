@@ -42,7 +42,7 @@ function App() {
           </DisplayMessage>
         )}
         {displayItems.map(item => (
-          <DisplayMessage key={item.id} opacity={item.visible ? 1 : 0} color={lineColors[item.lineId]}>
+          <DisplayMessage key={item.id} opacity={item.visible ? 1 : 0} color={lineColors[item.lineId]} direction={item.direction}>
             {item.stationName}
           </DisplayMessage>
         ))}
