@@ -4,12 +4,12 @@
     "mode": "mixolydian"
   },
   "lines": {
-    "victoria":         { "synth": "PianoSampler", "degrees": [1, 7], "octave": 4, "duration": "4n", "volume": -12 },
-    "central":          { "synth": "PianoSampler", "degrees": [2, 5], "octave": 3, "duration": "4n", "volume": -10 },
-    "piccadilly":       { "synth": "PianoSampler", "degrees": [4, 5], "octave": 3, "duration": "4n", "volume": -11 },
-    "circle":       { "synth": "PianoSampler", "degrees": [4, 5], "octave": 4, "duration": "4n", "volume": -11 },
-    "district":         { "synth": "PianoSampler", "degrees": [1],    "octave": 2, "duration": "4n", "volume": -12 },
-    "jubilee":          { "synth": "PianoSampler", "degrees": [3],    "octave": 3, "duration": "4n", "volume": -11 }
+    "victoria":   { "synth": "PianoSampler", "role": "spark",   "notes": ["G4", "B4", "D5"], "duration": "8n", "volume": -14, "patternSteps": 16, "patternHits": 6, "patternRotation": 1 },
+    "central":    { "synth": "PianoSampler", "role": "texture", "notes": ["D3", "F3", "A3"], "duration": "8n", "volume": -13, "patternSteps": 16, "patternHits": 3, "patternRotation": 3 },
+    "piccadilly": { "synth": "PianoSampler", "role": "texture", "notes": ["F3", "A3", "C4"],  "duration": "8n", "volume": -13, "patternSteps": 16, "patternHits": 3, "patternRotation": 6 },
+    "circle":     { "synth": "PianoSampler", "role": "spark",   "notes": ["E4", "A4", "C5"],   "duration": "8n", "volume": -15, "patternSteps": 16, "patternHits": 5, "patternRotation": 9 },
+    "district":   { "synth": "PianoSampler", "role": "anchor",  "notes": ["A2", "C3", "E3"],   "duration": "4n", "volume": -13, "patternSteps": 16, "patternHits": 2, "patternRotation": 0 },
+    "jubilee":    { "synth": "PianoSampler", "role": "texture", "notes": ["G3", "B3", "D4"],   "duration": "8n", "volume": -14, "patternSteps": 16, "patternHits": 4, "patternRotation": 11 }
   },
   "lineColors": {
     "bakerloo":         "#c8855a",

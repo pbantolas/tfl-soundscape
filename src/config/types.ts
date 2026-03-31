@@ -1,9 +1,14 @@
+export type LineRole = 'anchor' | 'texture' | 'spark'
+
 export interface LineSoundConfig {
   synth: string
-  degrees: number[]
-  octave: number
+  role: LineRole
+  notes: string[]
   duration: string
   volume: number
+  patternSteps: number
+  patternHits: number
+  patternRotation: number
   stationIds?: string[]
 }
 
@@ -49,18 +54,6 @@ export interface TflPrediction {
   timestamp: string
 }
 
-export interface ScheduledArrival {
-  predictionId: string
-  eventId: number
-  stationName: string
-  lineId: string
-  lineName: string
-  expectedArrival: number
-  scheduledAt: number
-  realWorldMs: number
-  lineConfig: ResolvedLineSoundConfig
-}
-
 export interface TimelineEvent {
   key: string
   stationId: string
@@ -69,5 +62,5 @@ export interface TimelineEvent {
   lineName: string
   direction: string
   realWorldMs: number
-  lineConfig: ResolvedLineSoundConfig
+  lineConfig: LineSoundConfig
 }

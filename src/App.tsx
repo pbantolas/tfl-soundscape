@@ -2,6 +2,7 @@ import { useTflEngine } from './hooks/useTflEngine'
 import { DisplayMessage } from './components/DisplayMessage'
 import { PlaybackClock } from './components/PlaybackClock'
 import { Scrubber } from './components/Scrubber'
+import { EnergyDebug } from './components/EnergyDebug'
 
 function App() {
   const {
@@ -21,6 +22,8 @@ function App() {
     loopEndMs,
     allEvents,
     lineColors,
+    lineEnergies,
+    currentBpm,
     seekStart,
     seekAndPlay,
     goLive,
@@ -49,7 +52,9 @@ function App() {
         ))}
       </div>
 
-        <Scrubber
+      <EnergyDebug lineEnergies={lineEnergies} currentBpm={currentBpm} lineColors={lineColors} />
+
+      <Scrubber
           scrubMs={scrubMs}
           timelineStartMs={timelineStartMs}
           timelineEndMs={timelineEndMs}

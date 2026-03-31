@@ -11,9 +11,14 @@ function isWithinWindow(event: TimelineEvent, window: TimelineWindow): boolean {
 
 function sameLineConfig(a: TimelineEvent['lineConfig'], b: TimelineEvent['lineConfig']): boolean {
   return a.synth === b.synth
-    && a.note === b.note
+    && a.role === b.role
     && a.duration === b.duration
     && a.volume === b.volume
+    && a.patternSteps === b.patternSteps
+    && a.patternHits === b.patternHits
+    && a.patternRotation === b.patternRotation
+    && a.notes.length === b.notes.length
+    && a.notes.every((note, index) => note === b.notes[index])
 }
 
 function sameEvent(a: TimelineEvent, b: TimelineEvent): boolean {
