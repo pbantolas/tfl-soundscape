@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Tone from 'tone'
 import { fetchLineArrivals } from '../api/tfl'
-import { cancelAll, disposeEffects, preloadSampler, setFilterFrequency, setTempo, triggerNoteAtTime } from '../audio/engine'
+import { cancelAll, disposeEffects, preloadSampler, setBrownNoiseGain, setFilterFrequency, setTempo, silenceBrownNoise, triggerNoteAtTime } from '../audio/engine'
 import stationsConfig from '../config/stations.json'
 import type { AppSoundConfig, LineRole, LineSoundConfig, ResolvedLineSoundConfig, TimelineEvent } from '../config/types'
 import { buildEuclideanPattern } from '../lib/euclidean'
@@ -357,6 +357,7 @@ export function useTflEngine() {
       const avgEnergy = total / count
       setFilterFrequency(avgEnergy)
       setTempo(avgEnergy)
+      setBrownNoiseGain(avgEnergy)
       setCurrentBpm(Math.round(Tone.getTransport().bpm.value))
     }
   }, [])
@@ -623,6 +624,7 @@ export function useTflEngine() {
     clearAllDisplayTimers()
     cancelAll()
     stopBedLoop()
+    silenceBrownNoise()
     playbackOriginMsRef.current = null
     playbackStartedAtPerfMsRef.current = null
     transportStartSecondsRef.current = null

@@ -75,6 +75,9 @@ type ShouldTrigger = () => boolean
 let reverb: Tone.Reverb | null = null
 let filter: Tone.Filter | null = null
 let limiter: Tone.Limiter | null = null
+let noiseSource: Tone.Noise | null = null
+let noiseBandpass: Tone.Filter | null = null
+let noiseGain: Tone.Gain | null = null
 let pianoSampler: Tone.Sampler | null = null
 let pianoSamplerLoadPromise: Promise<Tone.Sampler> | null = null
 let pianoSamplerLoadVersion = 0
@@ -105,6 +108,16 @@ function getFilter(): Tone.Filter {
   }
   if (!filter) {
     filter = new Tone.Filter({ frequency: 5000, type: 'lowpass', rolloff: -12 }).connect(reverb)
+  }
+  if (!noiseGain) {
+    noiseGain = new Tone.Gain(NOISE_GAIN_BASELINE).connect(limiter)
+  }
+  if (!noiseBandpass) {
+    noiseBandpass = new Tone.Filter({ frequency: NOISE_BP_FREQ_MIN, type: 'bandpass', Q: NOISE_BP_Q_MAX }).connect(noiseGain)
+  }
+  if (!noiseSource) {
+    noiseSource = new Tone.Noise('brown').connect(noiseBandpass)
+    noiseSource.start()
   }
   return filter
 }
@@ -404,6 +417,14 @@ function debugAudio(label: string, extra?: Record<string, unknown>) {
 const FILTER_MIN_HZ = 400
 const FILTER_MAX_HZ = 12000
 
+const NOISE_GAIN_BASELINE = 0.008   // boosted to compensate for bandpass attenuation
+const NOISE_GAIN_MAX      = 0.025
+
+const NOISE_BP_FREQ_MIN = 200   // Hz — deep rumble at rest
+const NOISE_BP_FREQ_MAX = 800   // Hz — crowd / movement presence at peak energy
+const NOISE_BP_Q_MAX    = 2.5   // narrow at rest: more tonal, focused
+const NOISE_BP_Q_MIN    = 0.9   // wider at peak: fuller, more chaotic
+
 const REVERB_WET_MAX = 0.85  // idle: spacious, distant
 const REVERB_WET_MIN = 0.35  // busy: present, close
 
@@ -426,6 +447,24 @@ export function setTempo(energy: number) {
   const e = Math.max(0, Math.min(1, energy))
   const bpm = TEMPO_MIN_BPM + (TEMPO_MAX_BPM - TEMPO_MIN_BPM) * e
   Tone.getTransport().bpm.rampTo(bpm, 4)
+}
+
+export function setBrownNoiseGain(energy: number) {
+  if (!noiseGain) return
+  const e = Math.max(0, Math.min(1, energy))
+  const gain = NOISE_GAIN_BASELINE + (NOISE_GAIN_MAX - NOISE_GAIN_BASELINE) * e
+  noiseGain.gain.rampTo(gain, 2)
+  if (noiseBandpass) {
+    const freq = NOISE_BP_FREQ_MIN * Math.pow(NOISE_BP_FREQ_MAX / NOISE_BP_FREQ_MIN, e)
+    const q = NOISE_BP_Q_MAX - (NOISE_BP_Q_MAX - NOISE_BP_Q_MIN) * e
+    noiseBandpass.frequency.rampTo(freq, 2)
+    noiseBandpass.Q.rampTo(q, 2)
+  }
+}
+
+export function silenceBrownNoise() {
+  if (!noiseGain) return
+  noiseGain.gain.rampTo(0, 1.5)
 }
 
 export function getAudioDebugSnapshot() {
@@ -530,6 +569,19 @@ export function disposeEffects() {
   if (limiter) {
     limiter.dispose()
     limiter = null
+  }
+  if (noiseSource) {
+    noiseSource.stop()
+    noiseSource.dispose()
+    noiseSource = null
+  }
+  if (noiseBandpass) {
+    noiseBandpass.dispose()
+    noiseBandpass = null
+  }
+  if (noiseGain) {
+    noiseGain.dispose()
+    noiseGain = null
   }
   droppedPreviewCount = 0
 }
