@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Tone from 'tone'
 import { fetchLineArrivals } from '../api/tfl'
-import { cancelAll, disposeEffects, preloadSampler, setFilterFrequency, triggerNoteAtTime } from '../audio/engine'
+import { cancelAll, disposeEffects, preloadSampler, setFilterFrequency, setTempo, triggerNoteAtTime } from '../audio/engine'
 import stationsConfig from '../config/stations.json'
 import type { AppSoundConfig, LineRole, LineSoundConfig, ResolvedLineSoundConfig, TimelineEvent } from '../config/types'
 import { buildEuclideanPattern } from '../lib/euclidean'
@@ -157,6 +157,7 @@ export function useTflEngine() {
   const [hasBufferedEvents, setHasBufferedEvents] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const [lineEnergies, setLineEnergies] = useState<Record<string, number>>({})
+  const [currentBpm, setCurrentBpm] = useState(BED_TEMPO_BPM)
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
@@ -353,7 +354,10 @@ export function useTflEngine() {
     }
     setLineEnergies(snapshot)
     if (count > 0 && audioReadyRef.current) {
-      setFilterFrequency(total / count)
+      const avgEnergy = total / count
+      setFilterFrequency(avgEnergy)
+      setTempo(avgEnergy)
+      setCurrentBpm(Math.round(Tone.getTransport().bpm.value))
     }
   }, [])
 
@@ -893,6 +897,7 @@ export function useTflEngine() {
     allEvents,
     lineColors: isDarkMode ? lineColors : lineColorsLight,
     lineEnergies,
+    currentBpm,
     seek,
     seekStart,
     seekAndPlay,

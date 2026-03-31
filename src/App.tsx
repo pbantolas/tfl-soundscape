@@ -22,6 +22,7 @@ function App() {
     allEvents,
     lineColors,
     lineEnergies,
+    currentBpm,
     seekStart,
     seekAndPlay,
     goLive,
@@ -51,7 +52,11 @@ function App() {
       </div>
 
       {Object.keys(lineEnergies).length > 0 && (
-        <div className="fixed top-4 right-4 flex flex-col gap-1 font-mono text-[10px] opacity-60">
+        <div className="fixed top-4 right-4 flex flex-col gap-1 text-xs opacity-60">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="w-16 text-right">BPM</span>
+            <span className="w-20 text-center tabular-nums">{currentBpm}</span>
+          </div>
           {Object.entries(lineEnergies).map(([lineId, energy]) => (
             <div key={lineId} className="flex items-center gap-1.5">
               <span className="w-16 text-right capitalize">{lineId}</span>

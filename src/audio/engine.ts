@@ -404,10 +404,28 @@ function debugAudio(label: string, extra?: Record<string, unknown>) {
 const FILTER_MIN_HZ = 400
 const FILTER_MAX_HZ = 12000
 
+const REVERB_WET_MAX = 0.85  // idle: spacious, distant
+const REVERB_WET_MIN = 0.35  // busy: present, close
+
+const TEMPO_MIN_BPM = 52  // quiet hours
+const TEMPO_MAX_BPM = 76  // rush hour
+
 export function setFilterFrequency(energy: number) {
+  const e = Math.max(0, Math.min(1, energy))
   const f = getFilter()
-  const freq = FILTER_MIN_HZ * Math.pow(FILTER_MAX_HZ / FILTER_MIN_HZ, Math.max(0, Math.min(1, energy)))
+  const freq = FILTER_MIN_HZ * Math.pow(FILTER_MAX_HZ / FILTER_MIN_HZ, e)
   f.frequency.rampTo(freq, 0.1)
+
+  if (reverb) {
+    const wet = REVERB_WET_MAX - (REVERB_WET_MAX - REVERB_WET_MIN) * e
+    reverb.wet.rampTo(wet, 1.5)
+  }
+}
+
+export function setTempo(energy: number) {
+  const e = Math.max(0, Math.min(1, energy))
+  const bpm = TEMPO_MIN_BPM + (TEMPO_MAX_BPM - TEMPO_MIN_BPM) * e
+  Tone.getTransport().bpm.rampTo(bpm, 4)
 }
 
 export function getAudioDebugSnapshot() {
