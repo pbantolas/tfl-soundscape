@@ -10,11 +10,14 @@ interface ScrubberProps {
   isLive: boolean
   isAutoPingPong: boolean
   autoRate: number
+  running: boolean
   onSeekStart: (ms: number) => void
   onSeek: (ms: number) => void
   onSeekEnd: (ms: number) => void
   onGoLive: () => void
   onStartAutoPingPong: () => void
+  onStart: () => void
+  onStop: () => void
 }
 
 function toPercent(ms: number, start: number, end: number): number {
@@ -31,11 +34,14 @@ export function Scrubber({
   isLive,
   isAutoPingPong,
   autoRate,
+  running,
   onSeekStart,
   onSeek,
   onSeekEnd,
   onGoLive,
   onStartAutoPingPong,
+  onStart,
+  onStop,
 }: ScrubberProps) {
   const barRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
@@ -107,34 +113,47 @@ export function Scrubber({
   return (
     <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-3">
       <div className="flex items-center gap-3 mb-2">
-        {!isAutoPingPong ? (
-          <button
-            onClick={onStartAutoPingPong}
-            className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/75 transition-colors uppercase tracking-[0.2em] font-pixel"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-300/70" />
-            Auto {autoRate}x
-          </button>
-        ) : (
-          <div className="flex items-center gap-1.5 text-xs text-cyan-200/70 uppercase tracking-[0.2em] font-pixel">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-300" />
-            Auto {autoRate}x
-          </div>
-        )}
+        <button
+          onClick={running ? onStop : onStart}
+          className="w-7 h-7 rounded-full border border-white/25 hover:border-white/50 transition-colors flex items-center justify-center shrink-0"
+        >
+          {running ? (
+            <div className="w-2.5 h-2.5 rounded-sm bg-white/70" />
+          ) : (
+            <div className="w-0 h-0 border-l-[8px] border-l-white/70 border-y-[6px] border-y-transparent ml-0.5" />
+          )}
+        </button>
 
-        {!isLive ? (
-          <button
-            onClick={onGoLive}
-            className="flex items-center gap-1.5 text-xs text-red-400 border border-red-400/40 px-2.5 py-1 rounded hover:border-red-400/70 transition-colors"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-            LIVE
-          </button>
-        ) : (
-          <div className="flex items-center gap-1.5 text-xs text-white/30">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            LIVE
-          </div>
+        {running && timelineEndMs > 0 && (
+          <>
+            {!isAutoPingPong ? (
+              <button
+                onClick={onStartAutoPingPong}
+                className="flex items-center gap-1.5 text-xs text-cyan-300/40 border border-cyan-300/20 px-2.5 py-1 rounded hover:text-cyan-300/70 hover:border-cyan-300/50 transition-colors uppercase tracking-[0.2em] font-pixel"
+              >
+                Auto {autoRate}x
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs text-cyan-200 border border-cyan-300/40 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse" />
+                Auto {autoRate}x
+              </div>
+            )}
+
+            {!isLive ? (
+              <button
+                onClick={onGoLive}
+                className="flex items-center gap-1.5 text-xs text-red-400/50 border border-red-400/25 px-2.5 py-1 rounded hover:text-red-400/80 hover:border-red-400/55 transition-colors uppercase tracking-[0.2em] font-pixel"
+              >
+                LIVE
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs text-red-400 border border-red-400/50 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                LIVE
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -169,10 +188,12 @@ export function Scrubber({
         )}
 
         {/* Scrub thumb — vertical line */}
-        <div
-          className="absolute top-0 -translate-x-1/2 w-0.5 h-full bg-white shadow-md"
-          style={{ left: `${thumbPercent}%` }}
-        />
+        {timelineEndMs > 0 && (
+          <div
+            className="absolute top-0 -translate-x-1/2 w-0.5 h-full bg-white shadow-md"
+            style={{ left: `${thumbPercent}%` }}
+          />
+        )}
       </div>
 
       {/* Time labels */}
