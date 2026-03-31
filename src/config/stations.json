@@ -4,12 +4,12 @@
     "mode": "mixolydian"
   },
   "lines": {
-    "victoria":   { "synth": "PianoSampler", "role": "spark",   "notes": ["B4", "A4", "Gb4"], "duration": "8n", "volume": -14, "patternSteps": 16, "patternHits": 4, "patternRotation": 1 },
-    "central":    { "synth": "PianoSampler", "role": "texture", "notes": ["Db3", "Gb3", "B3"], "duration": "8n", "volume": -13, "patternSteps": 16, "patternHits": 3, "patternRotation": 3 },
-    "piccadilly": { "synth": "PianoSampler", "role": "texture", "notes": ["E3", "Gb3", "B3"],  "duration": "8n", "volume": -13, "patternSteps": 16, "patternHits": 3, "patternRotation": 6 },
-    "circle":     { "synth": "PianoSampler", "role": "spark",   "notes": ["E4", "Gb4", "B4"],  "duration": "8n", "volume": -15, "patternSteps": 16, "patternHits": 5, "patternRotation": 9 },
-    "district":   { "synth": "PianoSampler", "role": "anchor",  "notes": ["B2", "Gb2"],         "duration": "4n", "volume": -13, "patternSteps": 16, "patternHits": 2, "patternRotation": 0 },
-    "jubilee":    { "synth": "PianoSampler", "role": "texture", "notes": ["Eb3", "B3", "Gb3"], "duration": "8n", "volume": -14, "patternSteps": 16, "patternHits": 4, "patternRotation": 11 }
+    "victoria":   { "synth": "PianoSampler", "role": "spark",   "notes": ["Gb4", "A4", "Db5"], "duration": "8n", "volume": -14, "patternSteps": 16, "patternHits": 4, "patternRotation": 1 },
+    "central":    { "synth": "PianoSampler", "role": "texture", "notes": ["Eb3", "Gb3", "Db4"], "duration": "8n", "volume": -13, "patternSteps": 16, "patternHits": 3, "patternRotation": 3 },
+    "piccadilly": { "synth": "PianoSampler", "role": "texture", "notes": ["E3", "Ab3", "Db4"],  "duration": "8n", "volume": -13, "patternSteps": 16, "patternHits": 3, "patternRotation": 6 },
+    "circle":     { "synth": "PianoSampler", "role": "spark",   "notes": ["E4", "B4", "Eb5"],   "duration": "8n", "volume": -15, "patternSteps": 16, "patternHits": 5, "patternRotation": 9 },
+    "district":   { "synth": "PianoSampler", "role": "anchor",  "notes": ["B2", "Gb2", "A2"],   "duration": "4n", "volume": -13, "patternSteps": 16, "patternHits": 2, "patternRotation": 0 },
+    "jubilee":    { "synth": "PianoSampler", "role": "texture", "notes": ["A3", "Db4", "E4"],   "duration": "8n", "volume": -14, "patternSteps": 16, "patternHits": 4, "patternRotation": 11 }
   },
   "lineColors": {
     "bakerloo":         "#c8855a",
