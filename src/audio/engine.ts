@@ -82,6 +82,7 @@ const voicePools = new Map<SynthKind, VoiceSlot[]>()
 const activeEvents = new Map<number, ActiveSynthEventHandle | ActiveSamplerEventHandle>()
 let nextImmediateEventId = -1
 const pendingPreviewTimeouts = new Map<number, ReturnType<typeof setTimeout>>()
+let droppedPreviewCount = 0
 
 let _lastCtxState = ''
 
@@ -118,7 +119,7 @@ function createPianoSampler(): Promise<Tone.Sampler> {
       urls: pianoSampleUrls,
       baseUrl: '/samples/piano/',
       release: PIANO_RELEASE,
-      attack: 0,
+      attack: 0.005,
       onload: () => {
         if (loadVersion !== pianoSamplerLoadVersion) {
           sampler.dispose()
@@ -189,6 +190,14 @@ function activeVoiceCount(): number {
   let count = 0
   for (const pool of voicePools.values()) {
     count += pool.filter((slot) => slot.state === 'active').length
+  }
+  return count
+}
+
+function activeSamplerCount(): number {
+  let count = 0
+  for (const handle of activeEvents.values()) {
+    if (handle.kind === 'sampler') count += 1
   }
   return count
 }
@@ -283,6 +292,10 @@ function prepareVoiceForNote(synth: SynthVoice, volume: number, time: number) {
   synth.volume.setValueAtTime(volume, time)
 }
 
+function decibelsToVelocity(volume: number): number {
+  return Math.max(0, Math.min(1, 10 ** (volume / 20)))
+}
+
 function triggerPianoSamplerNote(config: ResolvedLineSoundConfig, triggerTime: number) {
   const sampler = getLoadedPianoSampler()
   if (!sampler) {
@@ -290,9 +303,7 @@ function triggerPianoSamplerNote(config: ResolvedLineSoundConfig, triggerTime: n
     return false
   }
 
-  sampler.volume.cancelScheduledValues(triggerTime)
-  sampler.volume.setValueAtTime(config.volume, triggerTime)
-  sampler.triggerAttackRelease(config.note, config.duration, triggerTime)
+  sampler.triggerAttackRelease(config.note, config.duration, triggerTime, decibelsToVelocity(config.volume))
   return true
 }
 
@@ -329,6 +340,7 @@ function scheduleEvent(event: EngineEvent, time: number, onTrigger: () => void, 
       const releaseDelay = Tone.Time(config.duration).toSeconds() + PIANO_RELEASE + 0.1
       scheduleSamplerEventIdle(id, config.note, releaseDelay)
       onTrigger()
+      debugAudio('note', { note: config.note, synth: config.synth, mode: 'scheduled' })
       return
     }
 
@@ -344,6 +356,7 @@ function scheduleEvent(event: EngineEvent, time: number, onTrigger: () => void, 
 
     activeEvents.set(id, { kind: 'synth', slot, token })
     onTrigger()
+    debugAudio('note', { note: config.note, synth: config.synth, mode: 'scheduled' })
 
     const releaseDelay = Tone.Time(config.duration).toSeconds() + RELEASE + 0.5
     scheduleVoiceIdle(id, slot, token, releaseDelay)
@@ -367,20 +380,34 @@ function trimPreviewIds() {
 }
 
 let _debugLastLog = 0
+
 function debugAudio(label: string, extra?: Record<string, unknown>) {
   const now = Date.now()
   if (now - _debugLastLog < 500) return
   _debugLastLog = now
-  const ctx = Tone.getContext().rawContext
-  console.log(`[audio:${label}]`, {
-    ctxState: ctx?.state,
-    currentTime: ctx?.currentTime?.toFixed(2),
-    activeVoices: activeVoiceCount(),
-    pending: pendingIds.size,
-    previews: activePreviewCount(),
-    transportState: Tone.getTransport().state,
+  const fields: Record<string, unknown> = {
+    queue: activePreviewCount(),
+    samplerVoices: activeSamplerCount(),
+    synthVoices: activeVoiceCount(),
+    droppedTotal: droppedPreviewCount,
     ...extra,
-  })
+  }
+
+  const message = Object.entries(fields)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(' ')
+
+  console.debug(`[audio:${label}] ${message}`)
+}
+
+export function getAudioDebugSnapshot() {
+  return {
+    queue: activePreviewCount(),
+    samplerVoices: activeSamplerCount(),
+    synthVoices: activeVoiceCount(),
+    droppedTotal: droppedPreviewCount,
+  }
 }
 
 export function scheduleArrival(
@@ -454,6 +481,7 @@ export function disposeEffects() {
     limiter.dispose()
     limiter = null
   }
+  droppedPreviewCount = 0
 }
 
 const MAX_PREVIEWS = 10
@@ -471,6 +499,7 @@ function triggerPreviewNow(id: number, config: ResolvedLineSoundConfig, triggerT
     if (!triggerPianoSamplerNote(config, triggerTime)) return null
     const releaseDelay = Math.max(0, triggerTime - Tone.now()) + Tone.Time(config.duration).toSeconds() + PIANO_RELEASE + 0.1
     scheduleSamplerEventIdle(id, config.note, releaseDelay)
+    debugAudio('note', { note: config.note, synth: config.synth, mode: 'preview' })
     return id
   }
 
@@ -484,6 +513,7 @@ function triggerPreviewNow(id: number, config: ResolvedLineSoundConfig, triggerT
   slot.synth.triggerAttackRelease(config.note, config.duration, triggerTime)
 
   activeEvents.set(id, { kind: 'synth', slot, token })
+  debugAudio('note', { note: config.note, synth: config.synth, mode: 'preview' })
 
   const releaseDelay = Math.max(0, triggerTime - Tone.now()) + Tone.Time(config.duration).toSeconds() + RELEASE + 0.5
   scheduleVoiceIdle(id, slot, token, releaseDelay)
@@ -491,10 +521,15 @@ function triggerPreviewNow(id: number, config: ResolvedLineSoundConfig, triggerT
 }
 
 export function playNow(config: ResolvedLineSoundConfig): void {
-  debugAudio('playNow', { note: config.note, synth: config.synth })
   trimPreviewIds()
+  let dropped = 0
   while (activePreviewCount() >= MAX_PREVIEWS && previewIds.length > 0) {
     cancelScheduled(previewIds.shift()!)
+    dropped += 1
+  }
+  if (dropped > 0) {
+    droppedPreviewCount += dropped
+    debugAudio('preview-drop', { dropped, maxQueue: MAX_PREVIEWS })
   }
 
   const id = nextPreviewEventId()

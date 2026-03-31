@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Tone from 'tone'
 import { fetchLineArrivals } from '../api/tfl'
-import { scheduleArrival, cancelScheduled, cancelAll, disposeEffects, playNow, preloadSampler } from '../audio/engine'
+import { scheduleArrival, cancelScheduled, cancelAll, disposeEffects, getAudioDebugSnapshot, playNow, preloadSampler } from '../audio/engine'
 import { resolveLineSoundConfig } from '../config/tonality'
 import type { AppSoundConfig, LineSoundConfig, ScheduledArrival, TimelineEvent } from '../config/types'
 import stationsConfig from '../config/stations.json'
@@ -17,6 +17,7 @@ const MAX_DISPLAY_ITEMS = 3
 const AUTO_PLAYBACK_RATE = 32
 const PLAYBACK_START_LEAD_MS = 50
 const SCHEDULE_UPDATE_THRESHOLD_S = 15
+const MAX_PREVIEW_EVENTS_PER_STEP = 2
 const configuredEngines = new Set(Object.values(lines).map((line) => line.synth))
 const lineEntries = Object.entries(lines) as [string, LineSoundConfig][]
 
@@ -26,6 +27,7 @@ interface DisplayItem {
   id: string
   stationName: string
   lineName: string
+  lineId: string
   visible: boolean
 }
 
@@ -55,6 +57,11 @@ function findCrossedEvents(events: TimelineEvent[], fromMs: number, toMs: number
   return events
     .filter((event) => event.realWorldMs < fromMs && event.realWorldMs >= toMs)
     .reverse()
+}
+
+function selectPreviewEvents(events: TimelineEvent[]): TimelineEvent[] {
+  if (events.length <= MAX_PREVIEW_EVENTS_PER_STEP) return events
+  return events.slice(-MAX_PREVIEW_EVENTS_PER_STEP)
 }
 
 function isValidTimelinePosition(ms: number | null, startMs: number, endMs: number): ms is number {
@@ -147,11 +154,11 @@ export function useTflEngine() {
     displayTimersRef.current.clear()
   }, [])
 
-  const triggerDisplay = useCallback((stationName: string, lineName: string) => {
+  const triggerDisplay = useCallback((stationName: string, lineName: string, lineId: string) => {
     if (playbackModeRef.current !== 'live') return
     const id = `display-${displayIdRef.current++}`
     setDisplayItems(prev => {
-      const nextItems = [...prev, { id, stationName, lineName, visible: true }]
+      const nextItems = [...prev, { id, stationName, lineName, lineId, visible: true }]
       const overflow = nextItems.slice(0, Math.max(0, nextItems.length - MAX_DISPLAY_ITEMS))
 
       overflow.forEach(item => clearDisplayTimer(item.id))
@@ -232,7 +239,7 @@ export function useTflEngine() {
         event.lineConfig,
         arrivalTime,
         () => {
-          triggerDisplay(event.stationName, event.lineName)
+          triggerDisplay(event.stationName, event.lineName, event.lineId)
           scheduled.current.delete(event.key)
         },
         () => playbackModeRef.current === 'live',
@@ -306,13 +313,22 @@ export function useTflEngine() {
 
     const nearest = findNearest(allEventsRef.current, ms)
     if (nearest) {
-      setDisplayItems([{ id: 'seek', stationName: nearest.stationName, lineName: nearest.lineName, visible: true }])
+      setDisplayItems([{ id: 'seek', stationName: nearest.stationName, lineName: nearest.lineName, lineId: nearest.lineId, visible: true }])
     } else {
       setDisplayItems([])
     }
 
     if (audioReadyRef.current && previousMs !== null) {
-      for (const crossedEvent of findCrossedEvents(allEventsRef.current, previousMs, ms)) {
+      const crossedEvents = findCrossedEvents(allEventsRef.current, previousMs, ms)
+      const previewEvents = selectPreviewEvents(crossedEvents)
+      if (crossedEvents.length > 1) {
+        const snapshot = getAudioDebugSnapshot()
+        console.debug(
+          `[audio:scrub] crossed=${crossedEvents.length} played=${previewEvents.length} skipped=${crossedEvents.length - previewEvents.length} queue=${snapshot.queue} samplerVoices=${snapshot.samplerVoices} droppedTotal=${snapshot.droppedTotal}`,
+        )
+      }
+
+      for (const crossedEvent of previewEvents) {
         playNow(crossedEvent.lineConfig)
       }
     }
