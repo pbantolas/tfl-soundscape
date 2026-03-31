@@ -104,9 +104,9 @@ export function Scrubber({
   const thumbPercent = toPercent(scrubMs, timelineStartMs, timelineEndMs)
   const loopEndPercent = toPercent(loopEndMs, timelineStartMs, timelineEndMs)
 
-  // Sample up to 50 events for markers
-  const markerEvents = allEvents.length > 50
-    ? allEvents.filter((_, i) => i % Math.ceil(allEvents.length / 50) === 0)
+  // Sample up to 500 events for markers
+  const markerEvents = allEvents.length > 500
+    ? allEvents.filter((_, i) => i % Math.ceil(allEvents.length / 500) === 0)
     : allEvents
 
   const formatTime = (ms: number) => {

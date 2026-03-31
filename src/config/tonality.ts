@@ -29,7 +29,8 @@ export function resolveLineSoundConfig(
 ): ResolvedLineSoundConfig {
   const rootSemitone = ROOT_TO_SEMITONE[tonality.root] ?? ROOT_TO_SEMITONE.C
   const intervals = MODE_INTERVALS[tonality.mode]
-  const degreeIndex = Math.max(0, Math.min(intervals.length - 1, lineConfig.degree - 1))
+  const degree = lineConfig.degrees[Math.floor(Math.random() * lineConfig.degrees.length)]
+  const degreeIndex = Math.max(0, Math.min(intervals.length - 1, degree - 1))
   const semitone = (rootSemitone + intervals[degreeIndex]) % 12
 
   return {

@@ -11,8 +11,7 @@ function isWithinWindow(event: TimelineEvent, window: TimelineWindow): boolean {
 
 function sameLineConfig(a: TimelineEvent['lineConfig'], b: TimelineEvent['lineConfig']): boolean {
   return a.synth === b.synth
-    && a.degree === b.degree
-    && a.octave === b.octave
+    && a.note === b.note
     && a.duration === b.duration
     && a.volume === b.volume
 }
@@ -30,11 +29,11 @@ function sameEvent(a: TimelineEvent, b: TimelineEvent): boolean {
 export function applyTimelineWindow(
   currentEvents: TimelineEvent[],
   incomingEvents: TimelineEvent[],
-  stationId: string,
+  lineId: string,
   window: TimelineWindow,
 ): { events: TimelineEvent[]; changed: boolean } {
   const currentWindowed = currentEvents.filter(event => isWithinWindow(event, window))
-  const retainedEvents = currentWindowed.filter(event => event.stationId !== stationId)
+  const retainedEvents = currentWindowed.filter(event => event.lineId !== lineId)
   const byKey = new Map(retainedEvents.map(event => [event.key, event]))
 
   for (const event of incomingEvents) {

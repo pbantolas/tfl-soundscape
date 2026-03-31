@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Tone from 'tone'
-import { fetchArrivals } from '../api/tfl'
+import { fetchLineArrivals } from '../api/tfl'
 import { scheduleArrival, cancelScheduled, cancelAll, disposeEffects, playNow, preloadSampler } from '../audio/engine'
 import { resolveLineSoundConfig } from '../config/tonality'
-import type { AppSoundConfig, ScheduledArrival, StationSoundConfig, TimelineEvent } from '../config/types'
+import type { AppSoundConfig, LineSoundConfig, ScheduledArrival, TimelineEvent } from '../config/types'
 import stationsConfig from '../config/stations.json'
 import { applyTimelineWindow, getTimelineBounds } from '../lib/timelineBuffer'
 
-const { stations, tonality } = stationsConfig as unknown as AppSoundConfig
+const { lines, tonality } = stationsConfig as unknown as AppSoundConfig
 const POLL_WINDOW_MS = 30_000
 const PRELOAD_LOOKAHEAD_MS = 120_000
 const BUFFER_HISTORY_MS = 180_000
@@ -16,9 +16,8 @@ const FADE_DURATION_MS = 700
 const AUTO_PLAYBACK_RATE = 32
 const PLAYBACK_START_LEAD_MS = 50
 const SCHEDULE_UPDATE_THRESHOLD_S = 15
-const configuredEngines = new Set(
-  stations.flatMap((station) => Object.values(station.lines).map((line) => line.synth)),
-)
+const configuredEngines = new Set(Object.values(lines).map((line) => line.synth))
+const lineEntries = Object.entries(lines) as [string, LineSoundConfig][]
 
 type PlaybackMode = 'live' | 'scrub' | 'autoPingPong'
 
@@ -184,9 +183,8 @@ export function useTflEngine() {
         scheduled.current.delete(event.key)
       }
 
-      const resolvedConfig = resolveLineSoundConfig(event.lineConfig, tonality)
       const eventId = scheduleArrival(
-        resolvedConfig,
+        event.lineConfig,
         arrivalTime,
         () => {
           triggerDisplay(event.stationName, event.lineName)
@@ -270,7 +268,7 @@ export function useTflEngine() {
 
     if (audioReadyRef.current && previousMs !== null) {
       for (const crossedEvent of findCrossedEvents(allEventsRef.current, previousMs, ms)) {
-        playNow(resolveLineSoundConfig(crossedEvent.lineConfig, tonality))
+        playNow(crossedEvent.lineConfig)
       }
     }
 
@@ -307,30 +305,38 @@ export function useTflEngine() {
     }
   }, [ensureAudioUnlocked, preloadAudioEngines])
 
-  const pollStation = useCallback(async (station: StationSoundConfig) => {
+  const pollLine = useCallback(async (lineId: string, lineConfig: LineSoundConfig) => {
     try {
-      const predictions = await fetchArrivals(station.stationId)
+      const predictions = await fetchLineArrivals(lineId)
       const fetchedAtMs = Date.now()
+      const existingEventsByKey = new Map(
+        allEventsRef.current
+          .filter((event) => event.lineId === lineId)
+          .map((event) => [event.key, event]),
+      )
 
       const incomingEvents: TimelineEvent[] = predictions.flatMap((prediction) => {
-        const lineConfig = station.lines[prediction.lineId]
-        if (!lineConfig || prediction.timeToStation <= 0) return []
+        if (prediction.timeToStation <= 0) return []
+        if (lineConfig.stationIds && !lineConfig.stationIds.includes(prediction.naptanId)) return []
+
+        const key = `${prediction.naptanId}_${prediction.vehicleId}_${lineId}`
+        const existingEvent = existingEventsByKey.get(key)
 
         return [{
-          key: `${station.stationId}_${prediction.vehicleId}_${prediction.lineId}`,
-          stationId: station.stationId,
-          stationName: station.stationName,
-          lineId: prediction.lineId,
+          key,
+          stationId: prediction.naptanId,
+          stationName: prediction.stationName,
+          lineId,
           lineName: prediction.lineName,
           realWorldMs: fetchedAtMs + (prediction.timeToStation * 1000),
-          lineConfig,
+          lineConfig: existingEvent?.lineConfig ?? resolveLineSoundConfig(lineConfig, tonality),
         }]
       })
 
       const { events, changed } = applyTimelineWindow(
         allEventsRef.current,
         incomingEvents,
-        station.stationId,
+        lineId,
         getBufferWindow(),
       )
 
@@ -342,22 +348,22 @@ export function useTflEngine() {
         syncPlaybackSchedule(events)
       }
     } catch (err) {
-      console.error(`Poll error for ${station.stationName}:`, err)
+      console.error(`Poll error for line ${lineId}:`, err)
     }
   }, [getBufferWindow, refreshTimelineState, syncPlaybackSchedule])
 
   const queuePollCycle = useCallback(() => {
-    const stagger = POLL_WINDOW_MS / stations.length
+    const stagger = POLL_WINDOW_MS / lineEntries.length
 
-    stations.forEach((station, index) => {
+    lineEntries.forEach(([lineId, lineConfig], index) => {
       const timeout = setTimeout(() => {
         pollTimeoutsRef.current.delete(timeout)
-        void pollStation(station)
+        void pollLine(lineId, lineConfig)
       }, index * stagger)
 
       pollTimeoutsRef.current.add(timeout)
     })
-  }, [pollStation])
+  }, [pollLine])
 
   const start = useCallback(async () => {
     const timelineStart = allEventsRef.current[0]?.realWorldMs ?? 0

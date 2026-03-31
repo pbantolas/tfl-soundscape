@@ -1,9 +1,10 @@
 export interface LineSoundConfig {
   synth: string
-  degree: number
+  degrees: number[]
   octave: number
   duration: string
   volume: number
+  stationIds?: string[]
 }
 
 export interface ResolvedLineSoundConfig {
@@ -20,12 +21,6 @@ export interface TonalityConfig {
 
 export interface AppSoundConfig {
   tonality: TonalityConfig
-  stations: StationSoundConfig[]
-}
-
-export interface StationSoundConfig {
-  stationId: string
-  stationName: string
   lines: Record<string, LineSoundConfig>
 }
 
@@ -61,7 +56,7 @@ export interface ScheduledArrival {
   expectedArrival: number
   scheduledAt: number
   realWorldMs: number
-  lineConfig: LineSoundConfig
+  lineConfig: ResolvedLineSoundConfig
 }
 
 export interface TimelineEvent {
@@ -71,5 +66,5 @@ export interface TimelineEvent {
   lineId: string
   lineName: string
   realWorldMs: number
-  lineConfig: LineSoundConfig
+  lineConfig: ResolvedLineSoundConfig
 }

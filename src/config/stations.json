@@ -3,65 +3,10 @@
     "root": "E",
     "mode": "mixolydian"
   },
-  "stations": [
-    {
-      "stationId": "940GZZLUOXC",
-      "stationName": "Oxford Circus",
-      "lines": {
-        "victoria":  { "synth": "PianoSampler", "degree": 1, "octave": 4, "duration": "4n", "volume": -12 },
-        "central":   { "synth": "PianoSampler", "degree": 2, "octave": 3, "duration": "4n", "volume": -10 },
-        "bakerloo":  { "synth": "PianoSampler", "degree": 6, "octave": 3, "duration": "4n", "volume": -13 }
-      }
-    },
-    {
-      "stationId": "940GZZLUBNK",
-      "stationName": "Bank",
-      "lines": {
-        "central":       { "synth": "PianoSampler", "degree": 1, "octave": 3, "duration": "4n", "volume": -10 },
-        "northern":      { "synth": "PianoSampler", "degree": 1, "octave": 2, "duration": "4n", "volume": -8 },
-        "waterloo-city": { "synth": "PianoSampler", "degree": 2, "octave": 2, "duration": "4n", "volume": -10 },
-        "district":      { "synth": "PianoSampler", "degree": 5, "octave": 3, "duration": "4n", "volume": -12 },
-        "circle":        { "synth": "PianoSampler", "degree": 5, "octave": 3, "duration": "4n", "volume": -13 }
-      }
-    },
-    {
-      "stationId": "940GZZLUKSX",
-      "stationName": "King's Cross St. Pancras",
-      "lines": {
-        "victoria":         { "synth": "PianoSampler", "degree": 1, "octave": 4, "duration": "4n", "volume": -12 },
-        "piccadilly":       { "synth": "PianoSampler", "degree": 5, "octave": 3, "duration": "4n", "volume": -11 },
-        "northern":         { "synth": "PianoSampler", "degree": 1, "octave": 2, "duration": "4n", "volume": -8 },
-        "metropolitan":     { "synth": "PianoSampler", "degree": 3, "octave": 4, "duration": "4n", "volume": -13 },
-        "circle":           { "synth": "PianoSampler", "degree": 5, "octave": 3, "duration": "4n", "volume": -13 },
-        "hammersmith-city": { "synth": "PianoSampler", "degree": 3, "octave": 4, "duration": "4n", "volume": -14 }
-      }
-    },
-    {
-      "stationId": "940GZZLUWLO",
-      "stationName": "Waterloo",
-      "lines": {
-        "bakerloo": { "synth": "PianoSampler", "degree": 4, "octave": 3, "duration": "4n", "volume": -13 },
-        "jubilee":  { "synth": "PianoSampler", "degree": 6, "octave": 4, "duration": "4n", "volume": -13 },
-        "northern": { "synth": "PianoSampler", "degree": 1, "octave": 2, "duration": "4n", "volume": -8 }
-      }
-    },
-    {
-      "stationId": "940GZZLULVT",
-      "stationName": "Liverpool Street",
-      "lines": {
-        "central":          { "synth": "PianoSampler", "degree": 3, "octave": 3, "duration": "4n", "volume": -10 },
-        "circle":           { "synth": "PianoSampler", "degree": 5, "octave": 3, "duration": "4n", "volume": -13 },
-        "hammersmith-city": { "synth": "PianoSampler", "degree": 4, "octave": 4, "duration": "4n", "volume": -14 },
-        "metropolitan":     { "synth": "PianoSampler", "degree": 5, "octave": 4, "duration": "4n", "volume": -13 }
-      }
-    },
-    {
-      "stationId": "940GZZLUSTD",
-      "stationName": "Stratford",
-      "lines": {
-        "central": { "synth": "PianoSampler", "degree": 4, "octave": 3, "duration": "4n", "volume": -10 },
-        "jubilee": { "synth": "PianoSampler", "degree": 5, "octave": 4, "duration": "4n", "volume": -13 }
-      }
-    }
-  ]
+  "lines": {
+    "victoria":         { "synth": "PianoSampler", "degrees": [1, 7], "octave": 4, "duration": "4n", "volume": -12 },
+    "central":          { "synth": "PianoSampler", "degrees": [2, 5], "octave": 3, "duration": "4n", "volume": -10 },
+    "piccadilly":       { "synth": "PianoSampler", "degrees": [4, 5], "octave": 3, "duration": "4n", "volume": -11 },
+    "district":         { "synth": "PianoSampler", "degrees": [1],    "octave": 2, "duration": "4n", "volume": -12 }
+  }
 }
