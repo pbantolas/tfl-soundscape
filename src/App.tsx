@@ -34,7 +34,7 @@ function App() {
       <div className="absolute top-8 inset-x-0 flex justify-center">
         <PlaybackClock scrubMs={scrubMs} />
       </div>
-      <div className="flex flex-col items-start justify-center gap-2 max-w-2xl w-full">
+      <div className="flex flex-col items-start justify-center gap-2 max-w-2xl w-full pb-44 px-4 sm:px-0">
         {showIdleMessage && (
           <DisplayMessage>
             {hasBufferedEvents

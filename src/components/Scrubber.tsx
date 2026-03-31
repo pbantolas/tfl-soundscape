@@ -122,12 +122,48 @@ export function Scrubber({
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-3">
-      <div className="flex items-center gap-3 mb-2">
+    <div className="fixed bottom-0 left-0 right-0 px-4 pb-8 pt-3 sm:px-6 sm:pb-6">
+      {hasTimeline && (
+        <div className="flex items-center gap-2 sm:gap-3 mb-2">
+          {[4, 16].map(rate =>
+            isAutoPingPong && autoRate === rate ? (
+              <div key={rate} className="flex items-center gap-1.5 text-xs text-cyan-600 border border-cyan-500/50 dark:text-cyan-200 dark:border-cyan-300/40 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 dark:bg-cyan-300 animate-pulse" />
+                Auto {rate}x
+              </div>
+            ) : (
+              <button
+                key={rate}
+                onClick={() => onStartAutoPingPong(rate)}
+                className="flex items-center gap-1.5 text-xs text-cyan-600/50 border border-cyan-600/25 hover:text-cyan-600/80 hover:border-cyan-600/50 dark:text-cyan-300/40 dark:border-cyan-300/20 dark:hover:text-cyan-300/70 dark:hover:border-cyan-300/50 transition-colors px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel"
+              >
+                Auto {rate}x
+              </button>
+            )
+          )}
+
+          {!isLive ? (
+            <button
+              onClick={onGoLive}
+              className="flex items-center gap-1.5 text-xs text-red-500/60 border border-red-500/30 hover:text-red-500/90 hover:border-red-500/60 dark:text-red-400/50 dark:border-red-400/25 dark:hover:text-red-400/80 dark:hover:border-red-400/55 transition-colors px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel"
+            >
+              LIVE
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5 text-xs text-red-600 border border-red-500/60 dark:text-red-400 dark:border-red-400/50 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-600 dark:bg-red-500 animate-pulse" />
+              LIVE
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Timeline bar with play button */}
+      <div className="flex items-start gap-3">
         <button
           disabled={!hasTimeline}
           onClick={running ? onStop : onStart}
-          className="w-7 h-7 rounded-full border border-fg/25 hover:border-fg/50 disabled:opacity-35 disabled:hover:border-fg/25 transition-colors flex items-center justify-center shrink-0"
+          className="w-11 h-11 rounded-full border border-fg/25 hover:border-fg/50 disabled:opacity-35 disabled:hover:border-fg/25 transition-colors flex items-center justify-center shrink-0"
           title={audioReady ? undefined : 'Unlock audio and start playback'}
         >
           {running ? (
@@ -136,95 +172,60 @@ export function Scrubber({
             <div className="w-0 h-0 border-l-[8px] border-l-fg/70 border-y-[6px] border-y-transparent ml-0.5" />
           )}
         </button>
+        <div className="flex-1">
+          <div
+            ref={barRef}
+            className="relative h-10 bg-fg/5 rounded cursor-pointer overflow-hidden"
+            onMouseDown={handleMouseDown}
+            onTouchStart={handleTouchStart}
+          >
+            {/* Filled track up to scrub position */}
+            <div
+              className="absolute left-0 top-0 h-full bg-fg/8"
+              style={{ width: `${thumbPercent}%` }}
+            />
 
-        {hasTimeline && (
-          <>
-            {[4, 16].map(rate =>
-              isAutoPingPong && autoRate === rate ? (
-                <div key={rate} className="flex items-center gap-1.5 text-xs text-cyan-600 border border-cyan-500/50 dark:text-cyan-200 dark:border-cyan-300/40 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 dark:bg-cyan-300 animate-pulse" />
-                  Auto {rate}x
-                </div>
-              ) : (
-                <button
-                  key={rate}
-                  onClick={() => onStartAutoPingPong(rate)}
-                  className="flex items-center gap-1.5 text-xs text-cyan-600/50 border border-cyan-600/25 hover:text-cyan-600/80 hover:border-cyan-600/50 dark:text-cyan-300/40 dark:border-cyan-300/20 dark:hover:text-cyan-300/70 dark:hover:border-cyan-300/50 transition-colors px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel"
-                >
-                  Auto {rate}x
-                </button>
-              )
+            {/* Event markers */}
+            {markerEvents.map(e => (
+              <div
+                key={e.key}
+                className="absolute top-0 w-px h-full opacity-50"
+                style={{
+                  left: `${toPercent(e.realWorldMs, windowStartMs, windowEndMs)}%`,
+                  backgroundColor: lineColors[e.lineId] ?? 'rgba(255,255,255,0.4)',
+                }}
+              />
+            ))}
+
+            {/* Active auto-loop window within the full buffered range */}
+            {isAutoPingPong && loopStartMs > timelineStartMs && (
+              <div
+                className="absolute top-0 -translate-x-1/2 w-px h-full bg-cyan-300/40"
+                style={{ left: `${loopStartPercent}%` }}
+              />
+            )}
+            {isAutoPingPong && loopEndMs > timelineStartMs && (
+              <div
+                className="absolute top-0 -translate-x-1/2 w-px h-full bg-cyan-300/90"
+                style={{ left: `${loopEndPercent}%` }}
+              />
             )}
 
-            {!isLive ? (
-              <button
-                onClick={onGoLive}
-                className="flex items-center gap-1.5 text-xs text-red-500/60 border border-red-500/30 hover:text-red-500/90 hover:border-red-500/60 dark:text-red-400/50 dark:border-red-400/25 dark:hover:text-red-400/80 dark:hover:border-red-400/55 transition-colors px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel"
-              >
-                LIVE
-              </button>
-            ) : (
-              <div className="flex items-center gap-1.5 text-xs text-red-600 border border-red-500/60 dark:text-red-400 dark:border-red-400/50 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-600 dark:bg-red-500 animate-pulse" />
-                LIVE
-              </div>
+            {/* Scrub thumb — vertical line */}
+            {timelineEndMs > 0 && (
+              <div
+                className="absolute top-0 -translate-x-1/2 w-0.5 h-full bg-fg shadow-md"
+                style={{ left: `${thumbPercent}%` }}
+              />
             )}
-          </>
-        )}
-      </div>
+          </div>
 
-      {/* Timeline bar */}
-      <div
-        ref={barRef}
-        className="relative h-10 bg-fg/5 rounded cursor-pointer overflow-hidden"
-        onMouseDown={handleMouseDown}
-        onTouchStart={handleTouchStart}
-      >
-        {/* Filled track up to scrub position */}
-        <div
-          className="absolute left-0 top-0 h-full bg-fg/8"
-          style={{ width: `${thumbPercent}%` }}
-        />
-
-        {/* Event markers */}
-        {markerEvents.map(e => (
-          <div
-            key={e.key}
-            className="absolute top-0 w-px h-full opacity-50"
-              style={{
-              left: `${toPercent(e.realWorldMs, windowStartMs, windowEndMs)}%`,
-              backgroundColor: lineColors[e.lineId] ?? 'rgba(255,255,255,0.4)',
-            }}
-          />
-        ))}
-
-        {/* Active auto-loop window within the full buffered range */}
-        {isAutoPingPong && loopStartMs > timelineStartMs && (
-          <div
-            className="absolute top-0 -translate-x-1/2 w-px h-full bg-cyan-300/40"
-            style={{ left: `${loopStartPercent}%` }}
-          />
-        )}
-        {isAutoPingPong && loopEndMs > timelineStartMs && (
-          <div
-            className="absolute top-0 -translate-x-1/2 w-px h-full bg-cyan-300/90"
-            style={{ left: `${loopEndPercent}%` }}
-          />
-        )}
-
-        {/* Scrub thumb — vertical line */}
-        {timelineEndMs > 0 && (
-          <div
-            className="absolute top-0 -translate-x-1/2 w-0.5 h-full bg-fg shadow-md"
-            style={{ left: `${thumbPercent}%` }}
-          />
-        )}
-      </div>
-
-      {/* Time labels */}
-      <div className="flex justify-between mt-1.5 text-xs text-fg/20 select-none">
-        <span>{timelineStartMs > 0 ? formatTime(timelineStartMs) : ''}</span>
-        <span>{timelineEndMs > 0 ? formatTime(timelineEndMs) : ''}</span>
+          {/* Time labels */}
+          <div className="flex justify-between mt-1.5 text-xs text-fg/20 select-none">
+            <span>{timelineStartMs > 0 ? formatTime(timelineStartMs) : ''}</span>
+            <span>{timelineEndMs > 0 ? formatTime(timelineEndMs) : ''}</span>
+          </div>
+        </div>
       </div>
     </div>
   )
