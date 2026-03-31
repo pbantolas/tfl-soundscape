@@ -17,6 +17,7 @@ function App() {
     scrubMs,
     timelineStartMs,
     timelineEndMs,
+    loopStartMs,
     loopEndMs,
     allEvents,
     lineColors,
@@ -52,6 +53,7 @@ function App() {
           scrubMs={scrubMs}
           timelineStartMs={timelineStartMs}
           timelineEndMs={timelineEndMs}
+          loopStartMs={loopStartMs}
           loopEndMs={loopEndMs}
           allEvents={allEvents}
           lineColors={lineColors}

@@ -89,6 +89,7 @@ export function useTflEngine() {
   const [scrubMs, setScrubMs] = useState(0)
   const [timelineStartMs, setTimelineStartMs] = useState(0)
   const [timelineEndMs, setTimelineEndMs] = useState(0)
+  const [loopStartMs, setLoopStartMs] = useState(0)
   const [loopEndMs, setLoopEndMs] = useState(0)
   const [allEvents, setAllEvents] = useState<TimelineEvent[]>([])
   const [hasBufferedEvents, setHasBufferedEvents] = useState(false)
@@ -107,6 +108,7 @@ export function useTflEngine() {
   const latestTimelineEndMsRef = useRef(0)
   const autoLoopStartMsRef = useRef(0)
   const autoLoopEndMsRef = useRef(0)
+  const pendingLoopStartMsRef = useRef(0)
   const pendingLoopEndMsRef = useRef(0)
   const autoDirectionRef = useRef<1 | -1>(1)
   const autoRateRef = useRef(DEFAULT_AUTO_PLAYBACK_RATE)
@@ -307,11 +309,13 @@ export function useTflEngine() {
     transportStartSecondsRef.current = leadSeconds
     autoLoopStartMsRef.current = startMs
     autoLoopEndMsRef.current = latestTimelineEndMsRef.current
+    pendingLoopStartMsRef.current = startMs
     pendingLoopEndMsRef.current = latestTimelineEndMsRef.current
     autoDirectionRef.current = 1
     autoPlayheadMsRef.current = startMs
     lastAutoTickMsRef.current = 0
     previewCursorMsRef.current = startMs
+    setLoopStartMs(0)
     setLoopEndMs(0)
     setScrubMs(startMs)
 
@@ -329,7 +333,14 @@ export function useTflEngine() {
     setTimelineEndMs(endMs)
 
     if (playbackModeRef.current === 'autoPingPong') {
+      pendingLoopStartMsRef.current = startMs
       pendingLoopEndMsRef.current = Math.max(pendingLoopEndMsRef.current, endMs)
+    }
+
+    if (playbackModeRef.current !== 'live' && startMs > 0 && autoPlayheadMsRef.current < startMs) {
+      autoPlayheadMsRef.current = startMs
+      previewCursorMsRef.current = startMs
+      setScrubMs(startMs)
     }
 
     if (!runningRef.current && playbackModeRef.current === 'live') {
@@ -501,6 +512,7 @@ export function useTflEngine() {
     transportStartSecondsRef.current = null
     autoLoopStartMsRef.current = 0
     autoLoopEndMsRef.current = 0
+    pendingLoopStartMsRef.current = 0
     pendingLoopEndMsRef.current = 0
     autoDirectionRef.current = 1
     autoPlayheadMsRef.current = stoppedAtMs
@@ -510,6 +522,7 @@ export function useTflEngine() {
     Tone.getTransport().stop()
     Tone.getTransport().cancel()
     setRunning(false)
+    setLoopStartMs(0)
     setLoopEndMs(0)
     displayItemsRef.current = []
     setDisplayItems([])
@@ -610,11 +623,13 @@ export function useTflEngine() {
     setAutoRate(rate)
     autoLoopStartMsRef.current = loopStart
     autoLoopEndMsRef.current = loopEnd
+    pendingLoopStartMsRef.current = loopStart
     pendingLoopEndMsRef.current = loopEnd
     autoDirectionRef.current = 1
     autoPlayheadMsRef.current = loopStart
     lastAutoTickMsRef.current = performance.now()
     previewCursorMsRef.current = loopStart
+    setLoopStartMs(loopStart)
     setLoopEndMs(loopEnd)
     previewAt(loopStart)
 
@@ -648,12 +663,16 @@ export function useTflEngine() {
       autoPlayheadMsRef.current = nextMs
 
       if (restartedAtStart) {
-        const nextLoopEnd = Math.max(pendingLoopEndMsRef.current, activeLoopStart)
+        const nextLoopStart = pendingLoopStartMsRef.current
+        const nextLoopEnd = Math.max(pendingLoopEndMsRef.current, nextLoopStart)
+        autoLoopStartMsRef.current = nextLoopStart
         autoLoopEndMsRef.current = nextLoopEnd
+        autoPlayheadMsRef.current = Math.max(nextMs, nextLoopStart)
+        setLoopStartMs(nextLoopStart)
         setLoopEndMs(nextLoopEnd)
       }
 
-      previewAt(nextMs)
+      previewAt(autoPlayheadMsRef.current)
       autoPlayRef.current = requestAnimationFrame(tick)
     }
 
@@ -695,6 +714,7 @@ export function useTflEngine() {
     scrubMs,
     timelineStartMs,
     timelineEndMs,
+    loopStartMs,
     loopEndMs,
     allEvents,
     lineColors,

@@ -5,6 +5,7 @@ interface ScrubberProps {
   scrubMs: number
   timelineStartMs: number
   timelineEndMs: number
+  loopStartMs: number
   loopEndMs: number
   allEvents: TimelineEvent[]
   lineColors: Record<string, string>
@@ -32,6 +33,7 @@ export function Scrubber({
   scrubMs,
   timelineStartMs,
   timelineEndMs,
+  loopStartMs,
   loopEndMs,
   allEvents,
   lineColors,
@@ -51,14 +53,16 @@ export function Scrubber({
 }: ScrubberProps) {
   const barRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
+  const windowStartMs = isAutoPingPong && loopEndMs > loopStartMs ? loopStartMs : timelineStartMs
+  const windowEndMs = isAutoPingPong && loopEndMs > loopStartMs ? loopEndMs : timelineEndMs
 
   const msFromEvent = useCallback((clientX: number): number => {
     const bar = barRef.current
     if (!bar) return scrubMs
     const rect = bar.getBoundingClientRect()
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    return timelineStartMs + ratio * (timelineEndMs - timelineStartMs)
-  }, [scrubMs, timelineStartMs, timelineEndMs])
+    return windowStartMs + ratio * (windowEndMs - windowStartMs)
+  }, [scrubMs, windowEndMs, windowStartMs])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -103,7 +107,8 @@ export function Scrubber({
     }
   }, [msFromEvent, onSeek, onSeekEnd])
 
-  const thumbPercent = toPercent(scrubMs, timelineStartMs, timelineEndMs)
+  const thumbPercent = toPercent(scrubMs, windowStartMs, windowEndMs)
+  const loopStartPercent = toPercent(loopStartMs, timelineStartMs, timelineEndMs)
   const loopEndPercent = toPercent(loopEndMs, timelineStartMs, timelineEndMs)
 
   // Sample up to 500 events for markers
@@ -186,14 +191,20 @@ export function Scrubber({
           <div
             key={e.key}
             className="absolute top-0 w-px h-full opacity-50"
-            style={{
-              left: `${toPercent(e.realWorldMs, timelineStartMs, timelineEndMs)}%`,
+              style={{
+              left: `${toPercent(e.realWorldMs, windowStartMs, windowEndMs)}%`,
               backgroundColor: lineColors[e.lineId] ?? 'rgba(255,255,255,0.4)',
             }}
           />
         ))}
 
-        {/* Frozen loop end while auto mode is active */}
+        {/* Active auto-loop window within the full buffered range */}
+        {isAutoPingPong && loopStartMs > timelineStartMs && (
+          <div
+            className="absolute top-0 -translate-x-1/2 w-px h-full bg-cyan-300/40"
+            style={{ left: `${loopStartPercent}%` }}
+          />
+        )}
         {isAutoPingPong && loopEndMs > timelineStartMs && (
           <div
             className="absolute top-0 -translate-x-1/2 w-px h-full bg-cyan-300/90"
