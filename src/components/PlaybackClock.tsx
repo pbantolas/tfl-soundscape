@@ -14,7 +14,7 @@ export function PlaybackClock({ scrubMs }: PlaybackClockProps) {
   const time = formatTime(scrubMs)
 
   return (
-    <div className="flex font-pixel text-7xl select-none text-tfl-amber">
+    <div className="flex font-pixel text-7xl select-none text-tfl-amber antialiased">
       {time.split('').map((char, index) => (
         <span key={index} className={char === ':' ? 'w-[0.5em] text-center' : 'w-[1ch] text-center'}>
           {char}
