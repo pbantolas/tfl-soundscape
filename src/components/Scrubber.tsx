@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 import type { TimelineEvent } from '../config/types'
 
 interface ScrubberProps {
@@ -10,6 +10,7 @@ interface ScrubberProps {
   isLive: boolean
   isAutoPingPong: boolean
   autoRate: number
+  onSeekStart: (ms: number) => void
   onSeek: (ms: number) => void
   onSeekEnd: (ms: number) => void
   onGoLive: () => void
@@ -30,6 +31,7 @@ export function Scrubber({
   isLive,
   isAutoPingPong,
   autoRate,
+  onSeekStart,
   onSeek,
   onSeekEnd,
   onGoLive,
@@ -37,14 +39,6 @@ export function Scrubber({
 }: ScrubberProps) {
   const barRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
-  const [nowMs, setNowMs] = useState(() => Date.now())
-
-  // Keep a live "now" indicator when in scrub mode
-  useEffect(() => {
-    if (isLive) return
-    const id = setInterval(() => setNowMs(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [isLive])
 
   const msFromEvent = useCallback((clientX: number): number => {
     const bar = barRef.current
@@ -57,13 +51,13 @@ export function Scrubber({
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     draggingRef.current = true
-    onSeek(msFromEvent(e.clientX))
-  }, [msFromEvent, onSeek])
+    onSeekStart(msFromEvent(e.clientX))
+  }, [msFromEvent, onSeekStart])
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     draggingRef.current = true
-    onSeek(msFromEvent(e.touches[0].clientX))
-  }, [msFromEvent, onSeek])
+    onSeekStart(msFromEvent(e.touches[0].clientX))
+  }, [msFromEvent, onSeekStart])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -98,7 +92,6 @@ export function Scrubber({
   }, [msFromEvent, onSeek, onSeekEnd])
 
   const thumbPercent = toPercent(scrubMs, timelineStartMs, timelineEndMs)
-  const nowPercent = toPercent(nowMs, timelineStartMs, timelineEndMs)
   const loopEndPercent = toPercent(loopEndMs, timelineStartMs, timelineEndMs)
 
   // Sample up to 50 events for markers
@@ -172,14 +165,6 @@ export function Scrubber({
           <div
             className="absolute top-0 -translate-x-1/2 w-px h-full bg-cyan-300/90"
             style={{ left: `${loopEndPercent}%` }}
-          />
-        )}
-
-        {/* "Now" indicator — only visible in scrub mode */}
-        {!isLive && (
-          <div
-            className="absolute top-0 w-px h-full bg-red-500/50"
-            style={{ left: `${nowPercent}%` }}
           />
         )}
 

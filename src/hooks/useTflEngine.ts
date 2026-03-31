@@ -31,6 +31,18 @@ function findNearest(events: TimelineEvent[], ms: number): TimelineEvent | null 
   )
 }
 
+function findCrossedEvents(events: TimelineEvent[], fromMs: number, toMs: number): TimelineEvent[] {
+  if (events.length === 0 || fromMs === toMs) return []
+
+  if (toMs > fromMs) {
+    return events.filter((event) => event.realWorldMs > fromMs && event.realWorldMs <= toMs)
+  }
+
+  return events
+    .filter((event) => event.realWorldMs < fromMs && event.realWorldMs >= toMs)
+    .reverse()
+}
+
 export function useTflEngine() {
   const [running, setRunning] = useState(false)
   const [displayItems, setDisplayItems] = useState<DisplayItem[]>([])
@@ -45,11 +57,12 @@ export function useTflEngine() {
   const allEventsRef = useRef<TimelineEvent[]>([])
   const appStartMsRef = useRef(0)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const autoPlayRef = useRef<number | null>(null)
+  const livePlayheadRef = useRef<number | null>(null)
   const displayTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>())
   const runningRef = useRef(false)
   const playbackModeRef = useRef<PlaybackMode>('live')
-  const lastPlayedKeyRef = useRef<string | null>(null)
+  const previewCursorMsRef = useRef<number | null>(null)
   const latestTimelineEndMsRef = useRef(0)
   const autoLoopStartMsRef = useRef(0)
   const autoLoopEndMsRef = useRef(0)
@@ -66,9 +79,16 @@ export function useTflEngine() {
   }, [])
 
   const stopAutoPlayback = useCallback(() => {
-    if (autoPlayRef.current) {
-      clearInterval(autoPlayRef.current)
+    if (autoPlayRef.current !== null) {
+      cancelAnimationFrame(autoPlayRef.current)
       autoPlayRef.current = null
+    }
+  }, [])
+
+  const stopLivePlayhead = useCallback(() => {
+    if (livePlayheadRef.current !== null) {
+      cancelAnimationFrame(livePlayheadRef.current)
+      livePlayheadRef.current = null
     }
   }, [])
 
@@ -89,18 +109,25 @@ export function useTflEngine() {
     displayTimersRef.current.add(fadeOut)
   }, [])
 
-  const previewAt = useCallback((ms: number) => {
+  const previewAt = useCallback((ms: number, options?: { resetCursor?: boolean }) => {
+    const previousMs = options?.resetCursor ? null : previewCursorMsRef.current
     setScrubMs(ms)
     autoPlayheadMsRef.current = ms
 
     const nearest = findNearest(allEventsRef.current, ms)
-    if (!nearest) return
-
-    setDisplayItems([{ id: 'seek', stationName: nearest.stationName, lineName: nearest.lineName, visible: true }])
-    if (nearest.key !== lastPlayedKeyRef.current) {
-      lastPlayedKeyRef.current = nearest.key
-      playNow(resolveLineSoundConfig(nearest.lineConfig, tonality))
+    if (nearest) {
+      setDisplayItems([{ id: 'seek', stationName: nearest.stationName, lineName: nearest.lineName, visible: true }])
+    } else {
+      setDisplayItems([])
     }
+
+    if (previousMs !== null) {
+      for (const crossedEvent of findCrossedEvents(allEventsRef.current, previousMs, ms)) {
+        playNow(resolveLineSoundConfig(crossedEvent.lineConfig, tonality))
+      }
+    }
+
+    previewCursorMsRef.current = ms
   }, [])
 
   const pollStation = useCallback(async (station: StationSoundConfig) => {
@@ -222,7 +249,9 @@ export function useTflEngine() {
     autoDirectionRef.current = 1
     autoPlayheadMsRef.current = appStartMsRef.current
     lastAutoTickMsRef.current = 0
+    previewCursorMsRef.current = appStartMsRef.current
     stopAutoPlayback()
+    stopLivePlayhead()
     setMode('live')
     setTimelineStartMs(appStartMsRef.current)
     setScrubMs(appStartMsRef.current)
@@ -240,11 +269,12 @@ export function useTflEngine() {
         setTimeout(() => pollStation(station), i * stagger)
       })
     }, POLL_WINDOW_MS)
-  }, [pollStation, setMode, stopAutoPlayback])
+  }, [pollStation, setMode, stopAutoPlayback, stopLivePlayhead])
 
   const stop = useCallback(() => {
     runningRef.current = false
     stopAutoPlayback()
+    stopLivePlayhead()
     setMode('live')
 
     if (intervalRef.current) {
@@ -265,6 +295,7 @@ export function useTflEngine() {
     autoDirectionRef.current = 1
     autoPlayheadMsRef.current = 0
     lastAutoTickMsRef.current = 0
+    previewCursorMsRef.current = null
     setTimelineStartMs(0)
     setTimelineEndMs(0)
     setLoopEndMs(0)
@@ -273,33 +304,56 @@ export function useTflEngine() {
     Tone.getTransport().cancel()
     setRunning(false)
     setDisplayItems([])
-  }, [setMode, stopAutoPlayback])
+  }, [setMode, stopAutoPlayback, stopLivePlayhead])
 
-  // Live-time ticker: advance scrubMs to Date.now() every 500ms when in live mode
   useEffect(() => {
-    if (!running || !isLive) return
-    const id = setInterval(() => setScrubMs(Date.now()), 500)
-    return () => clearInterval(id)
-  }, [running, isLive])
+    if (!running || !isLive) {
+      stopLivePlayhead()
+      return
+    }
+
+    const tick = () => {
+      const now = Date.now()
+      setScrubMs(now)
+      autoPlayheadMsRef.current = now
+      previewCursorMsRef.current = now
+      livePlayheadRef.current = requestAnimationFrame(tick)
+    }
+
+    livePlayheadRef.current = requestAnimationFrame(tick)
+
+    return () => stopLivePlayhead()
+  }, [running, isLive, stopLivePlayhead])
+
+  const seekStart = useCallback((ms: number) => {
+    stopAutoPlayback()
+    stopLivePlayhead()
+    setMode('scrub')
+    setLoopEndMs(0)
+    previewAt(ms, { resetCursor: true })
+  }, [previewAt, setMode, stopAutoPlayback, stopLivePlayhead])
 
   const seek = useCallback((ms: number) => {
     stopAutoPlayback()
+    stopLivePlayhead()
     setMode('scrub')
     setLoopEndMs(0)
     previewAt(ms)
-  }, [previewAt, setMode, stopAutoPlayback])
+  }, [previewAt, setMode, stopAutoPlayback, stopLivePlayhead])
 
   const seekAndPlay = seek
 
   const goLive = useCallback(() => {
     stopAutoPlayback()
+    stopLivePlayhead()
     setMode('live')
     setLoopEndMs(0)
-    setScrubMs(Date.now())
-    autoPlayheadMsRef.current = Date.now()
-    lastPlayedKeyRef.current = null
+    const now = Date.now()
+    setScrubMs(now)
+    autoPlayheadMsRef.current = now
+    previewCursorMsRef.current = now
     setDisplayItems([])
-  }, [setMode, stopAutoPlayback])
+  }, [setMode, stopAutoPlayback, stopLivePlayhead])
 
   const startAutoPingPong = useCallback(() => {
     if (!runningRef.current) return
@@ -310,25 +364,28 @@ export function useTflEngine() {
     if (loopSpan <= 0) return
 
     stopAutoPlayback()
+    stopLivePlayhead()
     setMode('autoPingPong')
     autoLoopStartMsRef.current = loopStart
     autoLoopEndMsRef.current = loopEnd
     pendingLoopEndMsRef.current = loopEnd
     autoDirectionRef.current = 1
     autoPlayheadMsRef.current = loopStart
-    lastAutoTickMsRef.current = Date.now()
-    lastPlayedKeyRef.current = null
+    lastAutoTickMsRef.current = performance.now()
+    previewCursorMsRef.current = loopStart
     setLoopEndMs(loopEnd)
     previewAt(loopStart)
 
-    autoPlayRef.current = setInterval(() => {
+    const tick = (frameNow: number) => {
       const activeLoopStart = autoLoopStartMsRef.current
       const activeLoopEnd = autoLoopEndMsRef.current
-      if (activeLoopEnd <= activeLoopStart) return
+      if (activeLoopEnd <= activeLoopStart) {
+        autoPlayRef.current = requestAnimationFrame(tick)
+        return
+      }
 
-      const now = Date.now()
-      const elapsedMs = now - lastAutoTickMsRef.current
-      lastAutoTickMsRef.current = now
+      const elapsedMs = frameNow - lastAutoTickMsRef.current
+      lastAutoTickMsRef.current = frameNow
 
       let nextMs = autoPlayheadMsRef.current + elapsedMs * AUTO_PLAYBACK_RATE * autoDirectionRef.current
       let direction = autoDirectionRef.current
@@ -355,8 +412,11 @@ export function useTflEngine() {
       }
 
       previewAt(nextMs)
-    }, 100)
-  }, [previewAt, setMode, stopAutoPlayback, timelineStartMs])
+      autoPlayRef.current = requestAnimationFrame(tick)
+    }
+
+    autoPlayRef.current = requestAnimationFrame(tick)
+  }, [previewAt, setMode, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
 
   useEffect(() => {
     const displayTimers = displayTimersRef.current
@@ -365,6 +425,7 @@ export function useTflEngine() {
     return () => {
       runningRef.current = false
       stopAutoPlayback()
+      stopLivePlayhead()
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
@@ -377,7 +438,7 @@ export function useTflEngine() {
       Tone.getTransport().cancel()
       disposeEffects()
     }
-  }, [stopAutoPlayback])
+  }, [stopAutoPlayback, stopLivePlayhead])
 
   return {
     running,
@@ -393,6 +454,7 @@ export function useTflEngine() {
     loopEndMs,
     allEvents,
     seek,
+    seekStart,
     seekAndPlay,
     goLive,
     startAutoPingPong,

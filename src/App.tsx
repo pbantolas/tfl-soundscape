@@ -15,7 +15,7 @@ function App() {
     timelineEndMs,
     loopEndMs,
     allEvents,
-    seek,
+    seekStart,
     seekAndPlay,
     goLive,
     startAutoPingPong,
@@ -58,7 +58,8 @@ function App() {
           isLive={isLive}
           isAutoPingPong={playbackMode === 'autoPingPong'}
           autoRate={autoRate}
-          onSeek={seek}
+          onSeekStart={seekStart}
+          onSeek={seekAndPlay}
           onSeekEnd={seekAndPlay}
           onGoLive={goLive}
           onStartAutoPingPong={startAutoPingPong}
