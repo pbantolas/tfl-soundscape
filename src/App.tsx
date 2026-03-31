@@ -30,7 +30,7 @@ function App() {
   const showIdleMessage = displayItems.length === 0 && !isLive
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-950 text-white">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-bg text-fg">
       <div className="absolute top-8 inset-x-0 flex justify-center">
         <PlaybackClock scrubMs={scrubMs} />
       </div>

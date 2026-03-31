@@ -127,13 +127,13 @@ export function Scrubber({
         <button
           disabled={!hasTimeline}
           onClick={running ? onStop : onStart}
-          className="w-7 h-7 rounded-full border border-white/25 hover:border-white/50 disabled:opacity-35 disabled:hover:border-white/25 transition-colors flex items-center justify-center shrink-0"
+          className="w-7 h-7 rounded-full border border-fg/25 hover:border-fg/50 disabled:opacity-35 disabled:hover:border-fg/25 transition-colors flex items-center justify-center shrink-0"
           title={audioReady ? undefined : 'Unlock audio and start playback'}
         >
           {running ? (
-            <div className="w-2.5 h-2.5 rounded-sm bg-white/70" />
+            <div className="w-2.5 h-2.5 rounded-sm bg-fg/70" />
           ) : (
-            <div className="w-0 h-0 border-l-[8px] border-l-white/70 border-y-[6px] border-y-transparent ml-0.5" />
+            <div className="w-0 h-0 border-l-[8px] border-l-fg/70 border-y-[6px] border-y-transparent ml-0.5" />
           )}
         </button>
 
@@ -141,15 +141,15 @@ export function Scrubber({
           <>
             {[4, 16].map(rate =>
               isAutoPingPong && autoRate === rate ? (
-                <div key={rate} className="flex items-center gap-1.5 text-xs text-cyan-200 border border-cyan-300/40 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse" />
+                <div key={rate} className="flex items-center gap-1.5 text-xs text-cyan-600 border border-cyan-500/50 dark:text-cyan-200 dark:border-cyan-300/40 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 dark:bg-cyan-300 animate-pulse" />
                   Auto {rate}x
                 </div>
               ) : (
                 <button
                   key={rate}
                   onClick={() => onStartAutoPingPong(rate)}
-                  className="flex items-center gap-1.5 text-xs text-cyan-300/40 border border-cyan-300/20 px-2.5 py-1 rounded hover:text-cyan-300/70 hover:border-cyan-300/50 transition-colors uppercase tracking-[0.2em] font-pixel"
+                  className="flex items-center gap-1.5 text-xs text-cyan-600/50 border border-cyan-600/25 hover:text-cyan-600/80 hover:border-cyan-600/50 dark:text-cyan-300/40 dark:border-cyan-300/20 dark:hover:text-cyan-300/70 dark:hover:border-cyan-300/50 transition-colors px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel"
                 >
                   Auto {rate}x
                 </button>
@@ -159,13 +159,13 @@ export function Scrubber({
             {!isLive ? (
               <button
                 onClick={onGoLive}
-                className="flex items-center gap-1.5 text-xs text-red-400/50 border border-red-400/25 px-2.5 py-1 rounded hover:text-red-400/80 hover:border-red-400/55 transition-colors uppercase tracking-[0.2em] font-pixel"
+                className="flex items-center gap-1.5 text-xs text-red-500/60 border border-red-500/30 hover:text-red-500/90 hover:border-red-500/60 dark:text-red-400/50 dark:border-red-400/25 dark:hover:text-red-400/80 dark:hover:border-red-400/55 transition-colors px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel"
               >
                 LIVE
               </button>
             ) : (
-              <div className="flex items-center gap-1.5 text-xs text-red-400 border border-red-400/50 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <div className="flex items-center gap-1.5 text-xs text-red-600 border border-red-500/60 dark:text-red-400 dark:border-red-400/50 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-600 dark:bg-red-500 animate-pulse" />
                 LIVE
               </div>
             )}
@@ -176,13 +176,13 @@ export function Scrubber({
       {/* Timeline bar */}
       <div
         ref={barRef}
-        className="relative h-10 bg-white/5 rounded cursor-pointer overflow-hidden"
+        className="relative h-10 bg-fg/5 rounded cursor-pointer overflow-hidden"
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
       >
         {/* Filled track up to scrub position */}
         <div
-          className="absolute left-0 top-0 h-full bg-white/8"
+          className="absolute left-0 top-0 h-full bg-fg/8"
           style={{ width: `${thumbPercent}%` }}
         />
 
@@ -215,14 +215,14 @@ export function Scrubber({
         {/* Scrub thumb — vertical line */}
         {timelineEndMs > 0 && (
           <div
-            className="absolute top-0 -translate-x-1/2 w-0.5 h-full bg-white shadow-md"
+            className="absolute top-0 -translate-x-1/2 w-0.5 h-full bg-fg shadow-md"
             style={{ left: `${thumbPercent}%` }}
           />
         )}
       </div>
 
       {/* Time labels */}
-      <div className="flex justify-between mt-1.5 text-xs text-white/20 select-none">
+      <div className="flex justify-between mt-1.5 text-xs text-fg/20 select-none">
         <span>{timelineStartMs > 0 ? formatTime(timelineStartMs) : ''}</span>
         <span>{timelineEndMs > 0 ? formatTime(timelineEndMs) : ''}</span>
       </div>

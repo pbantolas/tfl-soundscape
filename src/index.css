@@ -12,4 +12,22 @@
 @theme {
   --font-pixel: 'GeistPixelCircle', monospace;
   --color-tfl-amber: #E8720C;
+
+  /* Semantic surface tokens — light mode defaults */
+  --color-bg: #fdfdfc;
+  --color-surface: #f0efec;
+  --color-fg: #1a1a1a;
+}
+
+:root {
+  --fg-soft: rgba(0, 0, 0, 0.65);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: oklch(14.5% 0 0);
+    --color-surface: oklch(20.5% 0 0);
+    --color-fg: #ffffff;
+    --fg-soft: rgba(255, 255, 255, 0.8);
+  }
 }
