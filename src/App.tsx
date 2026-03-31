@@ -24,25 +24,28 @@ function App() {
     startAutoPingPong,
   } = useTflEngine()
 
+  const visibleDisplayItems = displayItems.slice(-3)
+  const showIdleMessage = visibleDisplayItems.length === 0 && !isLive
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-950 text-white">
       <div className="flex flex-col items-center justify-center gap-2">
-        {displayItems.length === 0 && (
+        {showIdleMessage && (
           <div className="px-6 py-3 bg-neutral-900 rounded">
-            <p className="text-2xl font-bold text-white/80 tracking-widest uppercase font-pixel">
+            <p className="text-5xl text-white/80 tracking-tight font-pixel antialiased">
               {hasBufferedEvents
                 ? (audioReady ? 'Scrub, go live, or press play' : 'Tap anywhere on the timeline to unlock audio')
                 : 'Loading arrivals...'}
             </p>
           </div>
         )}
-        {displayItems.map(item => (
+        {visibleDisplayItems.map(item => (
           <div
             key={item.id}
             className="px-6 py-3 bg-neutral-900 rounded transition-opacity duration-700"
             style={{ opacity: item.visible ? 1 : 0 }}
           >
-            <p className="text-2xl font-bold text-white/80 tracking-widest uppercase font-pixel">
+            <p className="text-5xl text-white/80 tracking-tight font-pixel antialiased">
               {item.stationName} — {item.lineName}
             </p>
           </div>

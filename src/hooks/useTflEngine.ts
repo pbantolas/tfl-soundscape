@@ -13,6 +13,7 @@ const PRELOAD_LOOKAHEAD_MS = 120_000
 const BUFFER_HISTORY_MS = 180_000
 const DISPLAY_DURATION_MS = 3000
 const FADE_DURATION_MS = 700
+const MAX_DISPLAY_ITEMS = 3
 const AUTO_PLAYBACK_RATE = 32
 const PLAYBACK_START_LEAD_MS = 50
 const SCHEDULE_UPDATE_THRESHOLD_S = 15
@@ -26,6 +27,15 @@ interface DisplayItem {
   stationName: string
   lineName: string
   visible: boolean
+}
+
+interface DisplayTimers {
+  fadeOut: ReturnType<typeof setTimeout>
+  remove: ReturnType<typeof setTimeout> | null
+}
+
+function formatStationName(stationName: string): string {
+  return stationName.replace(/\s+Underground Station$/, '')
 }
 
 function findNearest(events: TimelineEvent[], ms: number): TimelineEvent | null {
@@ -69,7 +79,7 @@ export function useTflEngine() {
   const pollTimeoutsRef = useRef(new Set<ReturnType<typeof setTimeout>>())
   const autoPlayRef = useRef<number | null>(null)
   const livePlayheadRef = useRef<number | null>(null)
-  const displayTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>())
+  const displayTimersRef = useRef(new Map<string, DisplayTimers>())
   const runningRef = useRef(false)
   const playbackModeRef = useRef<PlaybackMode>('live')
   const previewCursorMsRef = useRef<number | null>(null)
@@ -87,6 +97,7 @@ export function useTflEngine() {
   const audioUnlockPromiseRef = useRef<Promise<void> | null>(null)
   const audioPreloadPromiseRef = useRef<Promise<void> | null>(null)
   const scrubRequestIdRef = useRef(0)
+  const displayIdRef = useRef(0)
 
   const isLiveMode = playbackMode === 'live'
 
@@ -114,22 +125,56 @@ export function useTflEngine() {
     pollTimeoutsRef.current.clear()
   }, [])
 
+  const clearDisplayTimer = useCallback((id: string) => {
+    const timers = displayTimersRef.current.get(id)
+    if (!timers) return
+
+    clearTimeout(timers.fadeOut)
+    if (timers.remove) {
+      clearTimeout(timers.remove)
+    }
+
+    displayTimersRef.current.delete(id)
+  }, [])
+
+  const clearAllDisplayTimers = useCallback(() => {
+    displayTimersRef.current.forEach((timers) => {
+      clearTimeout(timers.fadeOut)
+      if (timers.remove) {
+        clearTimeout(timers.remove)
+      }
+    })
+    displayTimersRef.current.clear()
+  }, [])
+
   const triggerDisplay = useCallback((stationName: string, lineName: string) => {
     if (playbackModeRef.current !== 'live') return
-    const id = `${stationName}-${lineName}-${Date.now()}`
-    setDisplayItems(prev => [...prev, { id, stationName, lineName, visible: true }])
+    const id = `display-${displayIdRef.current++}`
+    setDisplayItems(prev => {
+      const nextItems = [...prev, { id, stationName, lineName, visible: true }]
+      const overflow = nextItems.slice(0, Math.max(0, nextItems.length - MAX_DISPLAY_ITEMS))
+
+      overflow.forEach(item => clearDisplayTimer(item.id))
+
+      return nextItems.slice(-MAX_DISPLAY_ITEMS)
+    })
 
     const fadeOut = setTimeout(() => {
-      displayTimersRef.current.delete(fadeOut)
+      const timers = displayTimersRef.current.get(id)
+      if (!timers) return
+
       setDisplayItems(prev => prev.map(item => item.id === id ? { ...item, visible: false } : item))
+
       const remove = setTimeout(() => {
-        displayTimersRef.current.delete(remove)
+        displayTimersRef.current.delete(id)
         setDisplayItems(prev => prev.filter(item => item.id !== id))
       }, FADE_DURATION_MS)
-      displayTimersRef.current.add(remove)
+
+      displayTimersRef.current.set(id, { ...timers, remove })
     }, DISPLAY_DURATION_MS)
-    displayTimersRef.current.add(fadeOut)
-  }, [])
+
+    displayTimersRef.current.set(id, { fadeOut, remove: null })
+  }, [clearDisplayTimer])
 
   const getCurrentPlaybackPositionMs = useCallback(() => {
     if (!runningRef.current) return Date.now()
@@ -325,7 +370,7 @@ export function useTflEngine() {
         return [{
           key,
           stationId: prediction.naptanId,
-          stationName: prediction.stationName,
+          stationName: formatStationName(prediction.stationName),
           lineId,
           lineName: prediction.lineName,
           realWorldMs: fetchedAtMs + (prediction.timeToStation * 1000),
@@ -394,8 +439,7 @@ export function useTflEngine() {
     stopLivePlayhead()
     setMode('scrub')
 
-    displayTimersRef.current.forEach(timer => clearTimeout(timer))
-    displayTimersRef.current.clear()
+    clearAllDisplayTimers()
 
     cancelAll()
     scheduled.current.clear()
@@ -416,7 +460,7 @@ export function useTflEngine() {
     setLoopEndMs(0)
     setDisplayItems([])
     setScrubMs(stoppedAtMs)
-  }, [getCurrentPlaybackPositionMs, setMode, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
+  }, [clearAllDisplayTimers, getCurrentPlaybackPositionMs, setMode, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
 
   useEffect(() => {
     if (!running || !isLiveMode) {
@@ -572,15 +616,14 @@ export function useTflEngine() {
         intervalRef.current = null
       }
       clearPollTimeouts()
-      displayTimersRef.current.forEach(timer => clearTimeout(timer))
-      displayTimersRef.current.clear()
+      clearAllDisplayTimers()
       cancelAll()
       scheduled.current.clear()
       Tone.getTransport().stop()
       Tone.getTransport().cancel()
       disposeEffects()
     }
-  }, [clearPollTimeouts, queuePollCycle, stopAutoPlayback, stopLivePlayhead])
+  }, [clearAllDisplayTimers, clearPollTimeouts, queuePollCycle, stopAutoPlayback, stopLivePlayhead])
 
   return {
     running,

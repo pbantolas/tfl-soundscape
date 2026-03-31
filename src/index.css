@@ -1,11 +1,14 @@
 @import "tailwindcss";
 
 @font-face {
-  font-family: 'GeistPixelSquare';
-  src: url('./fonts/GeistPixel-Square.woff2') format('woff2');
-  font-weight: 100 900;
+  font-family: 'GeistPixelCircle';
+  src: url('./fonts/GeistPixel-Circle.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-synthesis: initial;
+  font-synthesis-weight: none;
 }
 
 @theme {
-  --font-pixel: 'GeistPixelSquare', monospace;
+  --font-pixel: 'GeistPixelCircle', monospace;
 }
