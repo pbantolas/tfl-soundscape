@@ -1,5 +1,17 @@
 # React + TypeScript + Vite
 
+## TfL API credentials
+
+Create a local env file at `.env.local` and add your TfL credentials:
+
+```bash
+VITE_TFL_APP_KEY=your-app-key
+```
+
+Vite only exposes browser env vars prefixed with `VITE_`, so the app reads the key via `import.meta.env.VITE_TFL_APP_KEY`.
+
+Restart `bun run dev` after changing env vars.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

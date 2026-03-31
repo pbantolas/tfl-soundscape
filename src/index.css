@@ -11,7 +11,7 @@
 
 @theme {
   --font-pixel: 'GeistPixelCircle', monospace;
-  --color-tfl-amber: #E8720C;
+  --color-tfl-amber: #d1670b;
 
   /* Semantic surface tokens — light mode defaults */
   --color-bg: #fdfdfc;
@@ -29,5 +29,6 @@
     --color-surface: oklch(20.5% 0 0);
     --color-fg: #ffffff;
     --fg-soft: rgba(255, 255, 255, 0.8);
+    --color-tfl-amber: #E8720C;
   }
 }
