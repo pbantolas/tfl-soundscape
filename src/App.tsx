@@ -26,8 +26,7 @@ function App() {
     startAutoPingPong,
   } = useTflEngine()
 
-  const visibleDisplayItems = displayItems.slice(-3)
-  const showIdleMessage = visibleDisplayItems.length === 0 && !isLive
+  const showIdleMessage = displayItems.length === 0 && !isLive
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-950 text-white">
@@ -42,7 +41,7 @@ function App() {
               : 'Loading arrivals...'}
           </DisplayMessage>
         )}
-        {visibleDisplayItems.map(item => (
+        {displayItems.map(item => (
           <DisplayMessage key={item.id} opacity={item.visible ? 1 : 0} color={lineColors[item.lineId]}>
             {item.stationName}
           </DisplayMessage>
