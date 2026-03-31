@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Tone from 'tone'
 import { fetchLineArrivals } from '../api/tfl'
-import { cancelAll, disposeEffects, preloadSampler, triggerNoteAtTime } from '../audio/engine'
+import { cancelAll, disposeEffects, preloadSampler, setFilterFrequency, triggerNoteAtTime } from '../audio/engine'
 import stationsConfig from '../config/stations.json'
 import type { AppSoundConfig, LineRole, LineSoundConfig, ResolvedLineSoundConfig, TimelineEvent } from '../config/types'
 import { buildEuclideanPattern } from '../lib/euclidean'
@@ -134,6 +134,14 @@ function createResolvedNote(config: LineSoundConfig, noteIndex: number): Resolve
   }
 }
 
+function debugPlayback(label: string, data: Record<string, unknown>) {
+  const fields = Object.entries(data)
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(' ')
+
+  console.debug(`[playback:${label}] ${fields}`)
+}
+
 export function useTflEngine() {
   const [running, setRunning] = useState(false)
   const [audioReady, setAudioReady] = useState(false)
@@ -148,6 +156,7 @@ export function useTflEngine() {
   const [allEvents, setAllEvents] = useState<TimelineEvent[]>([])
   const [hasBufferedEvents, setHasBufferedEvents] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const [lineEnergies, setLineEnergies] = useState<Record<string, number>>({})
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
@@ -186,6 +195,7 @@ export function useTflEngine() {
   const lineStatesRef = useRef<Map<string, RuntimeLineState>>(buildRuntimeLineStates())
   const bedEventIdRef = useRef<number | null>(null)
   const lastEnergyUpdateMsRef = useRef<number | null>(null)
+  const lastEnergyRenderMsRef = useRef<number>(0)
   const stepIndexRef = useRef(0)
 
   const isLiveMode = playbackMode === 'live'
@@ -329,6 +339,24 @@ export function useTflEngine() {
     }
   }, [])
 
+  const flushEnergyDisplay = useCallback(() => {
+    const now = performance.now()
+    if (now - lastEnergyRenderMsRef.current < 100) return
+    lastEnergyRenderMsRef.current = now
+    const snapshot: Record<string, number> = {}
+    let total = 0
+    let count = 0
+    for (const [lineId, state] of lineStatesRef.current) {
+      snapshot[lineId] = state.energy
+      total += state.energy
+      count += 1
+    }
+    setLineEnergies(snapshot)
+    if (count > 0 && audioReadyRef.current) {
+      setFilterFrequency(total / count)
+    }
+  }, [])
+
   const applyEventEnergy = useCallback((events: TimelineEvent[], targetMs: number) => {
     decayAllLineEnergy(targetMs)
     if (events.length === 0) return
@@ -342,7 +370,7 @@ export function useTflEngine() {
     for (const [lineId, count] of counts) {
       const state = lineStatesRef.current.get(lineId)
       if (!state) continue
-      state.energy = Math.min(1, state.energy + (ENERGY_BUMP * Math.log1p(count)))
+      state.energy = state.energy + (1 - state.energy) * ENERGY_BUMP * Math.log1p(count)
     }
   }, [decayAllLineEnergy])
 
@@ -373,6 +401,17 @@ export function useTflEngine() {
 
   const startTransport = useCallback((startMs: number) => {
     const leadSeconds = PLAYBACK_START_LEAD_MS / 1000
+
+    debugPlayback('start-transport', {
+      mode: playbackModeRef.current,
+      startMs,
+      timelineStart: allEventsRef.current[0]?.realWorldMs ?? 0,
+      timelineEnd: latestTimelineEndMsRef.current,
+      scrubMs: previewCursorMsRef.current ?? 'null',
+      autoPlayhead: autoPlayheadMsRef.current,
+      loopStart: autoLoopStartMsRef.current,
+      loopEnd: autoLoopEndMsRef.current,
+    })
 
     cancelAll()
     stopBedLoop()
@@ -410,11 +449,26 @@ export function useTflEngine() {
     setTimelineEndMs(endMs)
 
     if (playbackModeRef.current === 'autoPingPong') {
+      debugPlayback('refresh-auto-window', {
+        startMs,
+        endMs,
+        autoPlayhead: autoPlayheadMsRef.current,
+        previewCursor: previewCursorMsRef.current ?? 'null',
+        scrubMs,
+      })
       pendingLoopStartMsRef.current = startMs
       pendingLoopEndMsRef.current = Math.max(pendingLoopEndMsRef.current, endMs)
     }
 
     if (playbackModeRef.current !== 'live' && startMs > 0 && autoPlayheadMsRef.current < startMs) {
+      debugPlayback('refresh-clamp-playhead', {
+        mode: playbackModeRef.current,
+        startMs,
+        endMs,
+        autoPlayheadBefore: autoPlayheadMsRef.current,
+        previewCursorBefore: previewCursorMsRef.current ?? 'null',
+        scrubMsBefore: scrubMs,
+      })
       autoPlayheadMsRef.current = startMs
       previewCursorMsRef.current = startMs
       setScrubMs(startMs)
@@ -425,7 +479,7 @@ export function useTflEngine() {
       autoPlayheadMsRef.current = startMs
       previewCursorMsRef.current = startMs || null
     }
-  }, [])
+  }, [scrubMs])
 
   const previewAt = useCallback((ms: number, options?: { resetCursor?: boolean }) => {
     const previousMs = options?.resetCursor ? null : previewCursorMsRef.current
@@ -614,12 +668,13 @@ export function useTflEngine() {
       }
 
       previewCursorMsRef.current = nowMs
+      flushEnergyDisplay()
       livePlayheadRef.current = requestAnimationFrame(tick)
     }
 
     livePlayheadRef.current = requestAnimationFrame(tick)
     return () => stopLivePlayhead()
-  }, [applyEventEnergy, decayAllLineEnergy, getCurrentPlaybackPositionMs, isLiveMode, running, stopLivePlayhead, triggerDisplay])
+  }, [applyEventEnergy, decayAllLineEnergy, flushEnergyDisplay, getCurrentPlaybackPositionMs, isLiveMode, running, stopLivePlayhead, triggerDisplay])
 
   const seekStart = useCallback(async (ms: number) => {
     if (allEventsRef.current.length === 0) return
@@ -685,6 +740,17 @@ export function useTflEngine() {
     const loopSpan = loopEnd - loopStart
     if (loopSpan <= 0) return
 
+    debugPlayback('auto-start-request', {
+      rate,
+      loopStart,
+      loopEnd,
+      currentScrubMs: scrubMs,
+      currentPreviewCursor: previewCursorMsRef.current ?? 'null',
+      currentAutoPlayhead: autoPlayheadMsRef.current,
+      running: runningRef.current,
+      mode: playbackModeRef.current,
+    })
+
     scrubRequestIdRef.current += 1
 
     await ensureAudioReady({ preload: true })
@@ -707,6 +773,13 @@ export function useTflEngine() {
     setLoopStartMs(loopStart)
     setLoopEndMs(loopEnd)
     startTransport(loopStart)
+    debugPlayback('auto-start-applied', {
+      loopStart,
+      loopEnd,
+      scrubMs,
+      previewCursor: previewCursorMsRef.current ?? 'null',
+      autoPlayhead: autoPlayheadMsRef.current,
+    })
     previewAt(loopStart)
 
     const tick = (frameNow: number) => {
@@ -741,6 +814,13 @@ export function useTflEngine() {
       if (restartedAtStart) {
         const nextLoopStart = pendingLoopStartMsRef.current
         const nextLoopEnd = Math.max(pendingLoopEndMsRef.current, nextLoopStart)
+        debugPlayback('auto-loop-restart', {
+          nextLoopStart,
+          nextLoopEnd,
+          nextMs,
+          previousLoopStart: autoLoopStartMsRef.current,
+          previousLoopEnd: autoLoopEndMsRef.current,
+        })
         autoLoopStartMsRef.current = nextLoopStart
         autoLoopEndMsRef.current = nextLoopEnd
         autoPlayheadMsRef.current = Math.max(nextMs, nextLoopStart)
@@ -749,11 +829,12 @@ export function useTflEngine() {
       }
 
       previewAt(autoPlayheadMsRef.current)
+      flushEnergyDisplay()
       autoPlayRef.current = requestAnimationFrame(tick)
     }
 
     autoPlayRef.current = requestAnimationFrame(tick)
-  }, [ensureAudioReady, previewAt, setMode, startTransport, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
+  }, [ensureAudioReady, flushEnergyDisplay, previewAt, setMode, startTransport, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
 
   useEffect(() => {
     queuePollCycle()
@@ -794,6 +875,7 @@ export function useTflEngine() {
     loopEndMs,
     allEvents,
     lineColors: isDarkMode ? lineColors : lineColorsLight,
+    lineEnergies,
     seek,
     seekStart,
     seekAndPlay,

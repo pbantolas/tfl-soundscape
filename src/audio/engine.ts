@@ -401,6 +401,15 @@ function debugAudio(label: string, extra?: Record<string, unknown>) {
   console.debug(`[audio:${label}] ${message}`)
 }
 
+const FILTER_MIN_HZ = 400
+const FILTER_MAX_HZ = 12000
+
+export function setFilterFrequency(energy: number) {
+  const f = getFilter()
+  const freq = FILTER_MIN_HZ * Math.pow(FILTER_MAX_HZ / FILTER_MIN_HZ, Math.max(0, Math.min(1, energy)))
+  f.frequency.rampTo(freq, 0.1)
+}
+
 export function getAudioDebugSnapshot() {
   return {
     queue: activePreviewCount(),
