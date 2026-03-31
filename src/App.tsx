@@ -2,6 +2,7 @@ import { useTflEngine } from './hooks/useTflEngine'
 import { DisplayMessage } from './components/DisplayMessage'
 import { PlaybackClock } from './components/PlaybackClock'
 import { Scrubber } from './components/Scrubber'
+import { EnergyDebug } from './components/EnergyDebug'
 
 function App() {
   const {
@@ -51,26 +52,7 @@ function App() {
         ))}
       </div>
 
-      {Object.keys(lineEnergies).length > 0 && (
-        <div className="fixed top-4 right-4 flex flex-col gap-1 text-xs opacity-60">
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="w-16 text-right">BPM</span>
-            <span className="w-20 text-center tabular-nums">{currentBpm}</span>
-          </div>
-          {Object.entries(lineEnergies).map(([lineId, energy]) => (
-            <div key={lineId} className="flex items-center gap-1.5">
-              <span className="w-16 text-right capitalize">{lineId}</span>
-              <div className="w-20 h-1.5 bg-fg/10 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-100"
-                  style={{ width: `${energy * 100}%`, backgroundColor: lineColors[lineId] }}
-                />
-              </div>
-              <span className="w-6 text-left">{(energy * 100).toFixed(0)}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      <EnergyDebug lineEnergies={lineEnergies} currentBpm={currentBpm} lineColors={lineColors} />
 
       <Scrubber
           scrubMs={scrubMs}
