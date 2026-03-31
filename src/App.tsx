@@ -34,14 +34,17 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-bg text-fg">
-      <div className="absolute top-8 inset-x-0 flex justify-center">
+      <div className="absolute top-8 inset-x-0 flex flex-col items-center gap-2">
         <PlaybackClock scrubMs={scrubMs} />
+        <p className="text-xs text-fg/40 tracking-widest uppercase text-center px-4">
+          Live TFL data. More arrivals = brighter, faster &amp; denser sound. Try Auto 4x &amp; Auto 16x
+        </p>
       </div>
       <div className="flex flex-col items-start justify-center gap-2 max-w-2xl w-full pb-44 px-4 sm:px-0">
         {showIdleMessage && (
           <DisplayMessage>
             {hasBufferedEvents
-              ? (audioReady ? 'Scrub, go live, or press play' : 'TFL Sounds')
+              ? 'Play to hear arrivals'
               : 'Loading arrivals...'}
           </DisplayMessage>
         )}
