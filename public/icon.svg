@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Rounded square background -->
+  <rect x="0" y="0" width="512" height="512" rx="96" fill="#F0EDE8" />
+
+  <!-- Roundel ring -->
+  <circle cx="256" cy="256" r="176" fill="none" stroke="#2A2A2A" stroke-width="36" />
+
+  <!-- Waveform bar (replaces the straight horizontal bar) -->
+  <path d="M80,256 Q120,256 140,256 Q160,220 180,256 Q200,292 220,256 Q240,200 256,256 Q272,312 288,256 Q308,220 328,256 Q348,292 368,256 Q388,256 432,256" fill="none" stroke="#1A1A1A" stroke-width="28" stroke-linecap="round" />
+</svg>
