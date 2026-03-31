@@ -139,7 +139,7 @@ export function Scrubber({
 
         {hasTimeline && (
           <>
-            {[2, 16].map(rate =>
+            {[4, 16].map(rate =>
               isAutoPingPong && autoRate === rate ? (
                 <div key={rate} className="flex items-center gap-1.5 text-xs text-cyan-200 border border-cyan-300/40 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
                   <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse" />

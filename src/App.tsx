@@ -38,7 +38,7 @@ function App() {
         {showIdleMessage && (
           <DisplayMessage>
             {hasBufferedEvents
-              ? (audioReady ? 'Scrub, go live, or press play' : 'Tap anywhere on the timeline to unlock audio')
+              ? (audioReady ? 'Scrub, go live, or press play' : 'TFL Sounds')
               : 'Loading arrivals...'}
           </DisplayMessage>
         )}
