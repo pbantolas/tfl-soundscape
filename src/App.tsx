@@ -1,5 +1,6 @@
 import { useTflEngine } from './hooks/useTflEngine'
 import { DisplayMessage } from './components/DisplayMessage'
+import { PlaybackClock } from './components/PlaybackClock'
 import { Scrubber } from './components/Scrubber'
 
 function App() {
@@ -30,6 +31,9 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-950 text-white">
+      <div className="absolute top-8 inset-x-0 flex justify-center">
+        <PlaybackClock scrubMs={scrubMs} />
+      </div>
       <div className="flex flex-col items-center justify-center gap-2">
         {showIdleMessage && (
           <DisplayMessage>
