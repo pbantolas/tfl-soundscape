@@ -4,6 +4,7 @@ import { Scrubber } from './components/Scrubber'
 function App() {
   const {
     running,
+    hasBufferedEvents,
     displayItems,
     start,
     stop,
@@ -27,7 +28,7 @@ function App() {
         {!running && displayItems.length === 0 && (
           <div className="px-6 py-3 bg-neutral-900 rounded">
             <p className="text-2xl font-bold text-white/80 tracking-widest uppercase font-pixel">
-              Press play to begin
+              {hasBufferedEvents ? 'Press play to start from beginning' : 'Loading arrivals...'}
             </p>
           </div>
         )}
@@ -44,7 +45,7 @@ function App() {
         ))}
       </div>
 
-      <Scrubber
+        <Scrubber
         scrubMs={scrubMs}
         timelineStartMs={timelineStartMs}
         timelineEndMs={timelineEndMs}
@@ -52,9 +53,10 @@ function App() {
         allEvents={allEvents}
         isLive={isLive}
         isAutoPingPong={playbackMode === 'autoPingPong'}
-        autoRate={autoRate}
-        running={running}
-        onSeekStart={seekStart}
+          autoRate={autoRate}
+          canStart={hasBufferedEvents}
+          running={running}
+          onSeekStart={seekStart}
         onSeek={seekAndPlay}
         onSeekEnd={seekAndPlay}
         onGoLive={goLive}

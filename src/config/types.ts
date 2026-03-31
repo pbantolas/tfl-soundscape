@@ -66,7 +66,9 @@ export interface ScheduledArrival {
 
 export interface TimelineEvent {
   key: string
+  stationId: string
   stationName: string
+  lineId: string
   lineName: string
   realWorldMs: number
   lineConfig: LineSoundConfig

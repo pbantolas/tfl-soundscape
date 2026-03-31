@@ -10,6 +10,7 @@ interface ScrubberProps {
   isLive: boolean
   isAutoPingPong: boolean
   autoRate: number
+  canStart: boolean
   running: boolean
   onSeekStart: (ms: number) => void
   onSeek: (ms: number) => void
@@ -34,6 +35,7 @@ export function Scrubber({
   isLive,
   isAutoPingPong,
   autoRate,
+  canStart,
   running,
   onSeekStart,
   onSeek,
@@ -114,8 +116,9 @@ export function Scrubber({
     <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-3">
       <div className="flex items-center gap-3 mb-2">
         <button
+          disabled={!running && !canStart}
           onClick={running ? onStop : onStart}
-          className="w-7 h-7 rounded-full border border-white/25 hover:border-white/50 transition-colors flex items-center justify-center shrink-0"
+          className="w-7 h-7 rounded-full border border-white/25 hover:border-white/50 disabled:opacity-35 disabled:hover:border-white/25 transition-colors flex items-center justify-center shrink-0"
         >
           {running ? (
             <div className="w-2.5 h-2.5 rounded-sm bg-white/70" />
