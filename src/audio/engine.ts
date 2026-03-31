@@ -80,6 +80,8 @@ let pianoSamplerLoadPromise: Promise<Tone.Sampler> | null = null
 let pianoSamplerLoadVersion = 0
 const voicePools = new Map<SynthKind, VoiceSlot[]>()
 const activeEvents = new Map<number, ActiveSynthEventHandle | ActiveSamplerEventHandle>()
+let nextImmediateEventId = -1
+const pendingPreviewTimeouts = new Map<number, ReturnType<typeof setTimeout>>()
 
 let _lastCtxState = ''
 
@@ -352,13 +354,13 @@ function scheduleEvent(event: EngineEvent, time: number, onTrigger: () => void, 
 }
 
 function activePreviewCount(): number {
-  return previewIds.filter((id) => pendingIds.has(id) || activeEvents.has(id)).length
+  return previewIds.filter((id) => pendingIds.has(id) || pendingPreviewTimeouts.has(id) || activeEvents.has(id)).length
 }
 
 function trimPreviewIds() {
   for (let i = previewIds.length - 1; i >= 0; i -= 1) {
     const id = previewIds[i]
-    if (!pendingIds.has(id) && !activeEvents.has(id)) {
+    if (!pendingIds.has(id) && !pendingPreviewTimeouts.has(id) && !activeEvents.has(id)) {
       previewIds.splice(i, 1)
     }
   }
@@ -391,8 +393,15 @@ export function scheduleArrival(
 }
 
 export function cancelScheduled(id: number) {
-  Tone.getTransport().clear(id)
-  pendingIds.delete(id)
+  if (pendingIds.has(id)) {
+    Tone.getTransport().clear(id)
+    pendingIds.delete(id)
+  }
+  const pendingPreviewTimeout = pendingPreviewTimeouts.get(id)
+  if (pendingPreviewTimeout) {
+    clearTimeout(pendingPreviewTimeout)
+    pendingPreviewTimeouts.delete(id)
+  }
   clearPreviewId(id)
   const handle = activeEvents.get(id)
   if (handle) {
@@ -405,6 +414,10 @@ export function cancelAll() {
     Tone.getTransport().clear(id)
   }
   pendingIds.clear()
+  for (const timeout of pendingPreviewTimeouts.values()) {
+    clearTimeout(timeout)
+  }
+  pendingPreviewTimeouts.clear()
   for (const [id, handle] of activeEvents) {
     Tone.getTransport().clear(id)
     releaseActiveEvent(id, handle)
@@ -445,12 +458,54 @@ export function disposeEffects() {
 
 const MAX_PREVIEWS = 10
 
+function nextPreviewEventId(): number {
+  const id = nextImmediateEventId
+  nextImmediateEventId -= 1
+  return id
+}
+
+function triggerPreviewNow(id: number, config: ResolvedLineSoundConfig, triggerTime: number): number | null {
+  const engine = getEngineKind(config.synth)
+
+  if (engine === 'PianoSampler') {
+    if (!triggerPianoSamplerNote(config, triggerTime)) return null
+    const releaseDelay = Math.max(0, triggerTime - Tone.now()) + Tone.Time(config.duration).toSeconds() + PIANO_RELEASE + 0.1
+    scheduleSamplerEventIdle(id, config.note, releaseDelay)
+    return id
+  }
+
+  const slot = acquireVoice(engine)
+  const token = slot.token + 1
+  slot.token = token
+  slot.state = 'active'
+  slot.lastStart = Tone.now()
+
+  prepareVoiceForNote(slot.synth, config.volume, triggerTime)
+  slot.synth.triggerAttackRelease(config.note, config.duration, triggerTime)
+
+  activeEvents.set(id, { kind: 'synth', slot, token })
+
+  const releaseDelay = Math.max(0, triggerTime - Tone.now()) + Tone.Time(config.duration).toSeconds() + RELEASE + 0.5
+  scheduleVoiceIdle(id, slot, token, releaseDelay)
+  return id
+}
+
 export function playNow(config: ResolvedLineSoundConfig): void {
   debugAudio('playNow', { note: config.note, synth: config.synth })
   trimPreviewIds()
   while (activePreviewCount() >= MAX_PREVIEWS && previewIds.length > 0) {
     cancelScheduled(previewIds.shift()!)
   }
-  const id = scheduleEvent({ kind: 'note', config }, Tone.now() + 0.05, () => {})
+
+  const id = nextPreviewEventId()
+  const timeout = setTimeout(() => {
+    pendingPreviewTimeouts.delete(id)
+    const playedId = triggerPreviewNow(id, config, Tone.now() + 0.01)
+    if (playedId === null) {
+      clearPreviewId(id)
+    }
+  }, 50)
+
+  pendingPreviewTimeouts.set(id, timeout)
   previewIds.push(id)
 }

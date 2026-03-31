@@ -48,8 +48,13 @@ function findCrossedEvents(events: TimelineEvent[], fromMs: number, toMs: number
     .reverse()
 }
 
+function isValidTimelinePosition(ms: number | null, startMs: number, endMs: number): ms is number {
+  return ms !== null && ms >= startMs && ms <= endMs
+}
+
 export function useTflEngine() {
   const [running, setRunning] = useState(false)
+  const [audioReady, setAudioReady] = useState(false)
   const [displayItems, setDisplayItems] = useState<DisplayItem[]>([])
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('live')
   const [scrubMs, setScrubMs] = useState(0)
@@ -80,8 +85,11 @@ export function useTflEngine() {
   const playbackStartedAtPerfMsRef = useRef<number | null>(null)
   const transportStartSecondsRef = useRef<number | null>(null)
   const audioReadyRef = useRef(false)
+  const audioUnlockPromiseRef = useRef<Promise<void> | null>(null)
+  const audioPreloadPromiseRef = useRef<Promise<void> | null>(null)
+  const scrubRequestIdRef = useRef(0)
 
-  const isLive = playbackMode === 'live'
+  const isLiveMode = playbackMode === 'live'
 
   const setMode = useCallback((mode: PlaybackMode) => {
     playbackModeRef.current = mode
@@ -156,7 +164,7 @@ export function useTflEngine() {
 
     for (const [key, entry] of scheduled.current) {
       const isMissing = !eventKeys.has(key)
-      const isStale = entry.expectedArrival < Tone.now() - 10
+      const isStale = entry.expectedArrival < Tone.getTransport().seconds - 10
       if (!isMissing && !isStale) continue
       cancelScheduled(entry.eventId)
       scheduled.current.delete(key)
@@ -169,7 +177,7 @@ export function useTflEngine() {
       const existing = scheduled.current.get(event.key)
 
       if (existing) {
-        const timeUntilArrival = existing.expectedArrival - Tone.now()
+        const timeUntilArrival = existing.expectedArrival - Tone.getTransport().seconds
         const timeDiff = Math.abs(arrivalTime - existing.expectedArrival)
         if (timeUntilArrival < 10 || timeDiff < SCHEDULE_UPDATE_THRESHOLD_S) continue
         cancelScheduled(existing.eventId)
@@ -208,11 +216,12 @@ export function useTflEngine() {
     scheduled.current.clear()
     Tone.getTransport().stop()
     Tone.getTransport().cancel()
+    Tone.getTransport().seconds = 0
     Tone.getTransport().start()
 
     playbackOriginMsRef.current = startMs
     playbackStartedAtPerfMsRef.current = performance.now() + PLAYBACK_START_LEAD_MS
-    transportStartSecondsRef.current = Tone.now() + leadSeconds
+    transportStartSecondsRef.current = leadSeconds
     autoLoopStartMsRef.current = startMs
     autoLoopEndMsRef.current = latestTimelineEndMsRef.current
     pendingLoopEndMsRef.current = latestTimelineEndMsRef.current
@@ -268,6 +277,36 @@ export function useTflEngine() {
     previewCursorMsRef.current = ms
   }, [])
 
+  const ensureAudioUnlocked = useCallback(async () => {
+    if (audioReadyRef.current) return
+
+    if (!audioUnlockPromiseRef.current) {
+      audioUnlockPromiseRef.current = Tone.start().then(() => {
+        audioReadyRef.current = true
+        setAudioReady(true)
+      })
+    }
+
+    await audioUnlockPromiseRef.current
+  }, [])
+
+  const preloadAudioEngines = useCallback(async () => {
+    if (!audioPreloadPromiseRef.current) {
+      audioPreloadPromiseRef.current = Promise
+        .all([...configuredEngines].map((engine) => preloadSampler(engine)))
+        .then(() => undefined)
+    }
+
+    await audioPreloadPromiseRef.current
+  }, [])
+
+  const ensureAudioReady = useCallback(async (options?: { preload?: boolean }) => {
+    await ensureAudioUnlocked()
+    if (options?.preload) {
+      await preloadAudioEngines()
+    }
+  }, [ensureAudioUnlocked, preloadAudioEngines])
+
   const pollStation = useCallback(async (station: StationSoundConfig) => {
     try {
       const predictions = await fetchArrivals(station.stationId)
@@ -321,14 +360,14 @@ export function useTflEngine() {
   }, [pollStation])
 
   const start = useCallback(async () => {
-    if (runningRef.current) return
-
-    const playbackOriginMs = allEventsRef.current[0]?.realWorldMs
+    const timelineStart = allEventsRef.current[0]?.realWorldMs ?? 0
+    const timelineEnd = latestTimelineEndMsRef.current
+    const playbackOriginMs = isValidTimelinePosition(previewCursorMsRef.current, timelineStart, timelineEnd)
+      ? previewCursorMsRef.current
+      : timelineStart
     if (!playbackOriginMs) return
 
-    await Tone.start()
-    audioReadyRef.current = true
-    await Promise.all([...configuredEngines].map((engine) => preloadSampler(engine)))
+    await ensureAudioReady({ preload: true })
 
     runningRef.current = true
     stopAutoPlayback()
@@ -337,13 +376,17 @@ export function useTflEngine() {
     setRunning(true)
 
     retimePlayback(playbackOriginMs)
-  }, [retimePlayback, setMode, stopAutoPlayback, stopLivePlayhead])
+  }, [ensureAudioReady, retimePlayback, setMode, stopAutoPlayback, stopLivePlayhead])
 
   const stop = useCallback(() => {
+    const stoppedAtMs = runningRef.current
+      ? getCurrentPlaybackPositionMs()
+      : (previewCursorMsRef.current ?? allEventsRef.current[0]?.realWorldMs ?? 0)
+
     runningRef.current = false
     stopAutoPlayback()
     stopLivePlayhead()
-    setMode('live')
+    setMode('scrub')
 
     displayTimersRef.current.forEach(timer => clearTimeout(timer))
     displayTimersRef.current.clear()
@@ -357,20 +400,20 @@ export function useTflEngine() {
     autoLoopEndMsRef.current = 0
     pendingLoopEndMsRef.current = 0
     autoDirectionRef.current = 1
-    autoPlayheadMsRef.current = 0
+    autoPlayheadMsRef.current = stoppedAtMs
     lastAutoTickMsRef.current = 0
-    previewCursorMsRef.current = timelineStartMs || null
+    previewCursorMsRef.current = stoppedAtMs || timelineStartMs || null
 
     Tone.getTransport().stop()
     Tone.getTransport().cancel()
     setRunning(false)
     setLoopEndMs(0)
     setDisplayItems([])
-    setScrubMs(allEventsRef.current[0]?.realWorldMs ?? 0)
-  }, [setMode, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
+    setScrubMs(stoppedAtMs)
+  }, [getCurrentPlaybackPositionMs, setMode, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
 
   useEffect(() => {
-    if (!running || !isLive) {
+    if (!running || !isLiveMode) {
       stopLivePlayhead()
       return
     }
@@ -385,51 +428,79 @@ export function useTflEngine() {
 
     livePlayheadRef.current = requestAnimationFrame(tick)
     return () => stopLivePlayhead()
-  }, [getCurrentPlaybackPositionMs, isLive, running, stopLivePlayhead])
+  }, [getCurrentPlaybackPositionMs, isLiveMode, running, stopLivePlayhead])
 
-  const seekStart = useCallback((ms: number) => {
+  const seekStart = useCallback(async (ms: number) => {
+    if (allEventsRef.current.length === 0) return
+
+    const requestId = ++scrubRequestIdRef.current
+
+    await ensureAudioReady({ preload: true })
+    if (requestId !== scrubRequestIdRef.current) return
+
+    runningRef.current = false
     stopAutoPlayback()
     stopLivePlayhead()
     setMode('scrub')
+    setRunning(false)
     setLoopEndMs(0)
     previewAt(ms, { resetCursor: true })
-  }, [previewAt, setMode, stopAutoPlayback, stopLivePlayhead])
+  }, [ensureAudioReady, previewAt, setMode, stopAutoPlayback, stopLivePlayhead])
 
-  const seek = useCallback((ms: number) => {
+  const seek = useCallback(async (ms: number) => {
+    if (allEventsRef.current.length === 0) return
+
+    const requestId = ++scrubRequestIdRef.current
+
+    await ensureAudioReady({ preload: true })
+    if (requestId !== scrubRequestIdRef.current) return
+
+    runningRef.current = false
     stopAutoPlayback()
     stopLivePlayhead()
     setMode('scrub')
+    setRunning(false)
     setLoopEndMs(0)
     previewAt(ms)
-  }, [previewAt, setMode, stopAutoPlayback, stopLivePlayhead])
+  }, [ensureAudioReady, previewAt, setMode, stopAutoPlayback, stopLivePlayhead])
 
   const seekAndPlay = seek
 
-  const goLive = useCallback(() => {
-    if (!runningRef.current) return
+  const goLive = useCallback(async () => {
+    const liveMs = Math.max(Date.now(), allEventsRef.current[0]?.realWorldMs ?? 0)
+    if (!liveMs) return
 
+    scrubRequestIdRef.current += 1
+
+    await ensureAudioReady({ preload: true })
+
+    runningRef.current = true
     stopAutoPlayback()
     stopLivePlayhead()
     setMode('live')
-    const liveMs = Math.max(Date.now(), allEventsRef.current[0]?.realWorldMs ?? 0)
     retimePlayback(liveMs)
+    setRunning(true)
     setScrubMs(liveMs)
     autoPlayheadMsRef.current = liveMs
     previewCursorMsRef.current = liveMs || null
     setDisplayItems([])
-  }, [retimePlayback, setMode, stopAutoPlayback, stopLivePlayhead])
+  }, [ensureAudioReady, retimePlayback, setMode, stopAutoPlayback, stopLivePlayhead])
 
-  const startAutoPingPong = useCallback(() => {
-    if (!runningRef.current) return
-
+  const startAutoPingPong = useCallback(async () => {
     const loopStart = timelineStartMs
     const loopEnd = latestTimelineEndMsRef.current
     const loopSpan = loopEnd - loopStart
     if (loopSpan <= 0) return
 
+    scrubRequestIdRef.current += 1
+
+    await ensureAudioReady({ preload: true })
+
+    runningRef.current = false
     stopAutoPlayback()
     stopLivePlayhead()
     setMode('autoPingPong')
+    setRunning(false)
     autoLoopStartMsRef.current = loopStart
     autoLoopEndMsRef.current = loopEnd
     pendingLoopEndMsRef.current = loopEnd
@@ -480,7 +551,7 @@ export function useTflEngine() {
     }
 
     autoPlayRef.current = requestAnimationFrame(tick)
-  }, [previewAt, setMode, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
+  }, [ensureAudioReady, previewAt, setMode, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
 
   useEffect(() => {
     queuePollCycle()
@@ -507,13 +578,14 @@ export function useTflEngine() {
 
   return {
     running,
+    audioReady,
     hasBufferedEvents,
     displayItems,
     start,
     stop,
     playbackMode,
     autoRate: AUTO_PLAYBACK_RATE,
-    isLive,
+    isLive: running && isLiveMode,
     scrubMs,
     timelineStartMs,
     timelineEndMs,

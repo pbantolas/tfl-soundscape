@@ -4,6 +4,7 @@ import { Scrubber } from './components/Scrubber'
 function App() {
   const {
     running,
+    audioReady,
     hasBufferedEvents,
     displayItems,
     start,
@@ -25,10 +26,12 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-950 text-white">
       <div className="flex flex-col items-center justify-center gap-2">
-        {!running && displayItems.length === 0 && (
+        {displayItems.length === 0 && (
           <div className="px-6 py-3 bg-neutral-900 rounded">
             <p className="text-2xl font-bold text-white/80 tracking-widest uppercase font-pixel">
-              {hasBufferedEvents ? 'Press play to start from beginning' : 'Loading arrivals...'}
+              {hasBufferedEvents
+                ? (audioReady ? 'Scrub, go live, or press play' : 'Tap anywhere on the timeline to unlock audio')
+                : 'Loading arrivals...'}
             </p>
           </div>
         )}
@@ -46,24 +49,25 @@ function App() {
       </div>
 
         <Scrubber
-        scrubMs={scrubMs}
-        timelineStartMs={timelineStartMs}
-        timelineEndMs={timelineEndMs}
-        loopEndMs={loopEndMs}
-        allEvents={allEvents}
-        isLive={isLive}
-        isAutoPingPong={playbackMode === 'autoPingPong'}
+          scrubMs={scrubMs}
+          timelineStartMs={timelineStartMs}
+          timelineEndMs={timelineEndMs}
+          loopEndMs={loopEndMs}
+          allEvents={allEvents}
+          isLive={isLive}
+          isAutoPingPong={playbackMode === 'autoPingPong'}
           autoRate={autoRate}
-          canStart={hasBufferedEvents}
-          running={running}
+          audioReady={audioReady}
+          hasTimeline={hasBufferedEvents}
+          running={running || playbackMode === 'autoPingPong'}
           onSeekStart={seekStart}
-        onSeek={seekAndPlay}
-        onSeekEnd={seekAndPlay}
-        onGoLive={goLive}
-        onStartAutoPingPong={startAutoPingPong}
-        onStart={start}
-        onStop={stop}
-      />
+          onSeek={seekAndPlay}
+          onSeekEnd={seekAndPlay}
+          onGoLive={goLive}
+          onStartAutoPingPong={startAutoPingPong}
+          onStart={start}
+          onStop={stop}
+        />
     </div>
   )
 }
