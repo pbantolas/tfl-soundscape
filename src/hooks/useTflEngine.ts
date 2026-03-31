@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Tone from 'tone'
 import { fetchLineArrivals } from '../api/tfl'
-import { scheduleArrival, cancelScheduled, cancelAll, disposeEffects, getAudioDebugSnapshot, playNow, preloadSampler } from '../audio/engine'
-import { resolveLineSoundConfig } from '../config/tonality'
-import type { AppSoundConfig, LineSoundConfig, ScheduledArrival, TimelineEvent } from '../config/types'
+import { cancelAll, disposeEffects, preloadSampler, triggerNoteAtTime } from '../audio/engine'
 import stationsConfig from '../config/stations.json'
+import type { AppSoundConfig, LineRole, LineSoundConfig, ResolvedLineSoundConfig, TimelineEvent } from '../config/types'
+import { buildEuclideanPattern } from '../lib/euclidean'
 import { applyTimelineWindow, getTimelineBounds } from '../lib/timelineBuffer'
 
-const { lines, tonality, lineColors, lineColorsLight } = stationsConfig as unknown as AppSoundConfig
+const { lines, lineColors, lineColorsLight } = stationsConfig as AppSoundConfig
+
 const POLL_WINDOW_MS = 30_000
 const PRELOAD_LOOKAHEAD_MS = 120_000
 const BUFFER_HISTORY_MS = 180_000
@@ -15,11 +16,28 @@ const DISPLAY_DURATION_MS = 3000
 const FADE_DURATION_MS = 700
 const MAX_DISPLAY_ITEMS = 3
 const DEFAULT_AUTO_PLAYBACK_RATE = 16
+const BED_TEMPO_BPM = 60
+const BED_STEP_INTERVAL = '8n'
+const ENERGY_BUMP = 0.18
 const PLAYBACK_START_LEAD_MS = 50
-const SCHEDULE_UPDATE_THRESHOLD_S = 15
-const MAX_PREVIEW_EVENTS_PER_STEP = 2
+
 const configuredEngines = new Set(Object.values(lines).map((line) => line.synth))
 const lineEntries = Object.entries(lines) as [string, LineSoundConfig][]
+
+const BASELINE_ENERGY_BY_ROLE: Record<LineRole, number> = {
+  anchor: 0.12,
+  texture: 0.08,
+  spark: 0.05,
+}
+
+const HIT_PROBABILITY_BY_ROLE: Record<LineRole, { floor: number; ceiling: number }> = {
+  anchor: { floor: 0.35, ceiling: 0.9 },
+  texture: { floor: 0.2, ceiling: 0.8 },
+  spark: { floor: 0.12, ceiling: 0.72 },
+}
+
+const ENERGY_HALF_LIFE_MS = 12_000
+const ENERGY_DECAY_PER_MS = Math.log(2) / ENERGY_HALF_LIFE_MS
 
 type PlaybackMode = 'live' | 'scrub' | 'autoPingPong'
 
@@ -37,6 +55,13 @@ interface DisplayTimers {
   remove: ReturnType<typeof setTimeout> | null
 }
 
+interface RuntimeLineState {
+  config: LineSoundConfig
+  pattern: boolean[]
+  energy: number
+  noteIndex: number
+}
+
 function formatStationName(stationName: string): string {
   return stationName.replace(/\s+Underground Station$/, '')
 }
@@ -44,7 +69,7 @@ function formatStationName(stationName: string): string {
 function findNearest(events: TimelineEvent[], ms: number): TimelineEvent | null {
   if (events.length === 0) return null
   return events.reduce((best, event) =>
-    Math.abs(event.realWorldMs - ms) < Math.abs(best.realWorldMs - ms) ? event : best
+    Math.abs(event.realWorldMs - ms) < Math.abs(best.realWorldMs - ms) ? event : best,
   )
 }
 
@@ -60,11 +85,6 @@ function findCrossedEvents(events: TimelineEvent[], fromMs: number, toMs: number
     .reverse()
 }
 
-function selectPreviewEvents(events: TimelineEvent[]): TimelineEvent[] {
-  if (events.length <= MAX_PREVIEW_EVENTS_PER_STEP) return events
-  return events.slice(-MAX_PREVIEW_EVENTS_PER_STEP)
-}
-
 function toDisplayItem(event: TimelineEvent, suffix = ''): DisplayItem {
   return {
     id: `display-${event.key}-${event.realWorldMs}${suffix}`,
@@ -78,6 +98,40 @@ function toDisplayItem(event: TimelineEvent, suffix = ''): DisplayItem {
 
 function isValidTimelinePosition(ms: number | null, startMs: number, endMs: number): ms is number {
   return ms !== null && ms >= startMs && ms <= endMs
+}
+
+function getBaselineEnergy(role: LineRole): number {
+  return BASELINE_ENERGY_BY_ROLE[role]
+}
+
+function getHitProbability(role: LineRole, energy: number): number {
+  const { floor, ceiling } = HIT_PROBABILITY_BY_ROLE[role]
+  return floor + ((ceiling - floor) * Math.max(0, Math.min(1, energy)))
+}
+
+function decayEnergy(current: number, floor: number, elapsedMs: number): number {
+  if (elapsedMs <= 0 || current <= floor) return floor
+  const next = floor + ((current - floor) * Math.exp(-ENERGY_DECAY_PER_MS * elapsedMs))
+  return next < floor ? floor : next
+}
+
+function buildRuntimeLineStates(): Map<string, RuntimeLineState> {
+  return new Map(lineEntries.map(([lineId, config]) => [lineId, {
+    config,
+    pattern: buildEuclideanPattern(config.patternSteps, config.patternHits, config.patternRotation),
+    energy: getBaselineEnergy(config.role),
+    noteIndex: 0,
+  }]))
+}
+
+function createResolvedNote(config: LineSoundConfig, noteIndex: number): ResolvedLineSoundConfig {
+  const safeIndex = config.notes.length === 0 ? 0 : noteIndex % config.notes.length
+  return {
+    synth: config.synth,
+    note: config.notes[safeIndex] ?? config.notes[0] ?? 'B3',
+    duration: config.duration,
+    volume: config.volume,
+  }
 }
 
 export function useTflEngine() {
@@ -102,7 +156,6 @@ export function useTflEngine() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  const scheduled = useRef(new Map<string, ScheduledArrival>())
   const allEventsRef = useRef<TimelineEvent[]>([])
   const displayItemsRef = useRef<DisplayItem[]>([])
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -130,8 +183,18 @@ export function useTflEngine() {
   const audioPreloadPromiseRef = useRef<Promise<void> | null>(null)
   const scrubRequestIdRef = useRef(0)
   const displayIdRef = useRef(0)
+  const lineStatesRef = useRef<Map<string, RuntimeLineState>>(buildRuntimeLineStates())
+  const bedEventIdRef = useRef<number | null>(null)
+  const lastEnergyUpdateMsRef = useRef<number | null>(null)
+  const stepIndexRef = useRef(0)
 
   const isLiveMode = playbackMode === 'live'
+
+  const resetLineStates = useCallback(() => {
+    lineStatesRef.current = buildRuntimeLineStates()
+    stepIndexRef.current = 0
+    lastEnergyUpdateMsRef.current = null
+  }, [])
 
   const setMode = useCallback((mode: PlaybackMode) => {
     playbackModeRef.current = mode
@@ -205,7 +268,6 @@ export function useTflEngine() {
   }, [clearDisplayTimer])
 
   const triggerDisplay = useCallback((stationName: string, lineName: string, lineId: string, direction: string) => {
-    if (playbackModeRef.current !== 'live') return
     const id = `display-${displayIdRef.current++}`
     appendDisplayItems([{ id, stationName, lineName, lineId, direction, visible: true }])
 
@@ -227,7 +289,7 @@ export function useTflEngine() {
   }, [appendDisplayItems])
 
   const getCurrentPlaybackPositionMs = useCallback(() => {
-    if (!runningRef.current) return Date.now()
+    if (!runningRef.current) return previewCursorMsRef.current ?? Date.now()
 
     const playbackOriginMs = playbackOriginMsRef.current
     const playbackStartedAtPerfMs = playbackStartedAtPerfMsRef.current
@@ -246,72 +308,81 @@ export function useTflEngine() {
     }
   }, [])
 
-  const syncPlaybackSchedule = useCallback((events: TimelineEvent[]) => {
-    if (!runningRef.current) return
-
-    const playbackOriginMs = playbackOriginMsRef.current
-    const transportStartSeconds = transportStartSecondsRef.current
-    if (playbackOriginMs === null || transportStartSeconds === null) return
-
-    const playbackNowMs = getCurrentPlaybackPositionMs()
-    const eventKeys = new Set(events.map(event => event.key))
-
-    for (const [key, entry] of scheduled.current) {
-      const isMissing = !eventKeys.has(key)
-      const isStale = entry.expectedArrival < Tone.getTransport().seconds - 10
-      if (!isMissing && !isStale) continue
-      cancelScheduled(entry.eventId)
-      scheduled.current.delete(key)
+  const stopBedLoop = useCallback(() => {
+    if (bedEventIdRef.current !== null) {
+      Tone.getTransport().clear(bedEventIdRef.current)
+      bedEventIdRef.current = null
     }
+  }, [])
+
+  const decayAllLineEnergy = useCallback((targetMs: number) => {
+    const lastUpdate = lastEnergyUpdateMsRef.current
+    lastEnergyUpdateMsRef.current = targetMs
+    if (lastUpdate === null) return
+
+    const elapsedMs = Math.max(0, targetMs - lastUpdate)
+    if (elapsedMs === 0) return
+
+    for (const state of lineStatesRef.current.values()) {
+      const floor = getBaselineEnergy(state.config.role)
+      state.energy = decayEnergy(state.energy, floor, elapsedMs)
+    }
+  }, [])
+
+  const applyEventEnergy = useCallback((events: TimelineEvent[], targetMs: number) => {
+    decayAllLineEnergy(targetMs)
+    if (events.length === 0) return
+
+    const counts = new Map<string, number>()
 
     for (const event of events) {
-      if (event.realWorldMs < playbackNowMs) continue
+      counts.set(event.lineId, (counts.get(event.lineId) ?? 0) + 1)
+      triggerDisplay(event.stationName, event.lineName, event.lineId, event.direction)
+    }
 
-      const arrivalTime = transportStartSeconds + ((event.realWorldMs - playbackOriginMs) / 1000)
-      const existing = scheduled.current.get(event.key)
+    for (const [lineId, count] of counts) {
+      const state = lineStatesRef.current.get(lineId)
+      if (!state) continue
+      state.energy = Math.min(1, state.energy + (ENERGY_BUMP * Math.log1p(count)))
+    }
+  }, [decayAllLineEnergy, triggerDisplay])
 
-      if (existing) {
-        const timeUntilArrival = existing.expectedArrival - Tone.getTransport().seconds
-        const timeDiff = Math.abs(arrivalTime - existing.expectedArrival)
-        if (timeUntilArrival < 10 || timeDiff < SCHEDULE_UPDATE_THRESHOLD_S) continue
-        cancelScheduled(existing.eventId)
-        scheduled.current.delete(event.key)
+  const startBedLoop = useCallback(() => {
+    stopBedLoop()
+    stepIndexRef.current = 0
+    Tone.getTransport().bpm.value = BED_TEMPO_BPM
+
+    bedEventIdRef.current = Tone.getTransport().scheduleRepeat((time) => {
+      const stepIndex = stepIndexRef.current
+
+      for (const state of lineStatesRef.current.values()) {
+        const pattern = state.pattern
+        if (!pattern[stepIndex % pattern.length]) continue
+
+        const probability = getHitProbability(state.config.role, state.energy)
+        if (Math.random() > probability) continue
+
+        const noteConfig = createResolvedNote(state.config, state.noteIndex)
+        if (triggerNoteAtTime(noteConfig, time) && state.config.notes.length > 0) {
+          state.noteIndex = (state.noteIndex + 1) % state.config.notes.length
+        }
       }
 
-      const eventId = scheduleArrival(
-        event.lineConfig,
-        arrivalTime,
-        () => {
-          triggerDisplay(event.stationName, event.lineName, event.lineId, event.direction)
-          scheduled.current.delete(event.key)
-        },
-        () => playbackModeRef.current === 'live',
-      )
+      stepIndexRef.current = (stepIndex + 1) % 16
+    }, BED_STEP_INTERVAL, 0)
+  }, [stopBedLoop])
 
-      scheduled.current.set(event.key, {
-        predictionId: event.key,
-        eventId,
-        stationName: event.stationName,
-        lineId: event.lineId,
-        lineName: event.lineName,
-        expectedArrival: arrivalTime,
-        scheduledAt: Date.now(),
-        realWorldMs: event.realWorldMs,
-        lineConfig: event.lineConfig,
-      })
-    }
-  }, [getCurrentPlaybackPositionMs, triggerDisplay])
-
-  const retimePlayback = useCallback((startMs: number) => {
+  const startTransport = useCallback((startMs: number) => {
     const leadSeconds = PLAYBACK_START_LEAD_MS / 1000
 
     cancelAll()
-    scheduled.current.clear()
+    stopBedLoop()
     Tone.getTransport().stop()
     Tone.getTransport().cancel()
     Tone.getTransport().seconds = 0
     Tone.getTransport().start()
 
+    resetLineStates()
     playbackOriginMsRef.current = startMs
     playbackStartedAtPerfMsRef.current = performance.now() + PLAYBACK_START_LEAD_MS
     transportStartSecondsRef.current = leadSeconds
@@ -326,9 +397,8 @@ export function useTflEngine() {
     setLoopStartMs(0)
     setLoopEndMs(0)
     setScrubMs(startMs)
-
-    syncPlaybackSchedule(allEventsRef.current)
-  }, [syncPlaybackSchedule])
+    startBedLoop()
+  }, [resetLineStates, startBedLoop, stopBedLoop])
 
   const refreshTimelineState = useCallback((events: TimelineEvent[]) => {
     allEventsRef.current = events
@@ -369,27 +439,21 @@ export function useTflEngine() {
 
     if (crossedEvents.length > 0) {
       appendDisplayItems(crossedEvents.map((event, index) => toDisplayItem(event, `-${ms}-${index}`)))
+      if (audioReadyRef.current) {
+        applyEventEnergy(crossedEvents, ms)
+      }
     } else if (previousMs === null || displayItemsRef.current.length === 0) {
       const nearest = findNearest(allEventsRef.current, ms)
       replaceDisplayItems(nearest ? [toDisplayItem(nearest)] : [])
-    }
-
-    if (audioReadyRef.current && previousMs !== null) {
-      const previewEvents = selectPreviewEvents(crossedEvents)
-      if (crossedEvents.length > 1) {
-        const snapshot = getAudioDebugSnapshot()
-        console.debug(
-          `[audio:scrub] crossed=${crossedEvents.length} played=${previewEvents.length} skipped=${crossedEvents.length - previewEvents.length} queue=${snapshot.queue} samplerVoices=${snapshot.samplerVoices} droppedTotal=${snapshot.droppedTotal}`,
-        )
+      if (audioReadyRef.current) {
+        decayAllLineEnergy(ms)
       }
-
-      for (const crossedEvent of previewEvents) {
-        playNow(crossedEvent.lineConfig)
-      }
+    } else if (audioReadyRef.current) {
+      decayAllLineEnergy(ms)
     }
 
     previewCursorMsRef.current = ms
-  }, [appendDisplayItems, replaceDisplayItems])
+  }, [appendDisplayItems, applyEventEnergy, decayAllLineEnergy, replaceDisplayItems])
 
   const ensureAudioUnlocked = useCallback(async () => {
     if (audioReadyRef.current) return
@@ -425,28 +489,20 @@ export function useTflEngine() {
     try {
       const predictions = await fetchLineArrivals(lineId)
       const fetchedAtMs = Date.now()
-      const existingEventsByKey = new Map(
-        allEventsRef.current
-          .filter((event) => event.lineId === lineId)
-          .map((event) => [event.key, event]),
-      )
 
       const incomingEvents: TimelineEvent[] = predictions.flatMap((prediction) => {
         if (prediction.timeToStation <= 0) return []
         if (lineConfig.stationIds && !lineConfig.stationIds.includes(prediction.naptanId)) return []
 
-        const key = `${prediction.naptanId}_${prediction.vehicleId}_${lineId}`
-        const existingEvent = existingEventsByKey.get(key)
-
         return [{
-          key,
+          key: `${prediction.naptanId}_${prediction.vehicleId}_${lineId}`,
           stationId: prediction.naptanId,
           stationName: formatStationName(prediction.stationName),
           lineId,
           lineName: prediction.lineName,
           direction: prediction.direction,
           realWorldMs: fetchedAtMs + (prediction.timeToStation * 1000),
-          lineConfig: existingEvent?.lineConfig ?? resolveLineSoundConfig(lineConfig, tonality),
+          lineConfig,
         }]
       })
 
@@ -460,14 +516,10 @@ export function useTflEngine() {
       if (changed) {
         refreshTimelineState(events)
       }
-
-      if (runningRef.current) {
-        syncPlaybackSchedule(events)
-      }
     } catch (err) {
       console.error(`Poll error for line ${lineId}:`, err)
     }
-  }, [getBufferWindow, refreshTimelineState, syncPlaybackSchedule])
+  }, [getBufferWindow, refreshTimelineState])
 
   const queuePollCycle = useCallback(() => {
     const stagger = POLL_WINDOW_MS / lineEntries.length
@@ -498,8 +550,8 @@ export function useTflEngine() {
     setMode('live')
     setRunning(true)
 
-    retimePlayback(playbackOriginMs)
-  }, [ensureAudioReady, retimePlayback, setMode, stopAutoPlayback, stopLivePlayhead])
+    startTransport(playbackOriginMs)
+  }, [ensureAudioReady, setMode, startTransport, stopAutoPlayback, stopLivePlayhead])
 
   const stop = useCallback(() => {
     const stoppedAtMs = runningRef.current
@@ -512,9 +564,9 @@ export function useTflEngine() {
     setMode('scrub')
 
     clearAllDisplayTimers()
-
     cancelAll()
-    scheduled.current.clear()
+    stopBedLoop()
+    resetLineStates()
     playbackOriginMsRef.current = null
     playbackStartedAtPerfMsRef.current = null
     transportStartSecondsRef.current = null
@@ -535,7 +587,7 @@ export function useTflEngine() {
     displayItemsRef.current = []
     setDisplayItems([])
     setScrubMs(stoppedAtMs)
-  }, [clearAllDisplayTimers, getCurrentPlaybackPositionMs, setMode, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
+  }, [clearAllDisplayTimers, getCurrentPlaybackPositionMs, resetLineStates, setMode, stopAutoPlayback, stopBedLoop, stopLivePlayhead, timelineStartMs])
 
   useEffect(() => {
     if (!running || !isLiveMode) {
@@ -548,12 +600,16 @@ export function useTflEngine() {
       setScrubMs(nowMs)
       autoPlayheadMsRef.current = nowMs
       previewCursorMsRef.current = nowMs
+      if (audioReadyRef.current) {
+        const crossedEvents = findCrossedEvents(allEventsRef.current, nowMs - 250, nowMs)
+        applyEventEnergy(crossedEvents, nowMs)
+      }
       livePlayheadRef.current = requestAnimationFrame(tick)
     }
 
     livePlayheadRef.current = requestAnimationFrame(tick)
     return () => stopLivePlayhead()
-  }, [getCurrentPlaybackPositionMs, isLiveMode, running, stopLivePlayhead])
+  }, [applyEventEnergy, getCurrentPlaybackPositionMs, isLiveMode, running, stopLivePlayhead])
 
   const seekStart = useCallback(async (ms: number) => {
     if (allEventsRef.current.length === 0) return
@@ -569,8 +625,9 @@ export function useTflEngine() {
     setMode('scrub')
     setRunning(false)
     setLoopEndMs(0)
+    startTransport(ms)
     previewAt(ms, { resetCursor: true })
-  }, [ensureAudioReady, previewAt, setMode, stopAutoPlayback, stopLivePlayhead])
+  }, [ensureAudioReady, previewAt, setMode, startTransport, stopAutoPlayback, stopLivePlayhead])
 
   const seek = useCallback(async (ms: number) => {
     if (allEventsRef.current.length === 0) return
@@ -603,14 +660,14 @@ export function useTflEngine() {
     stopAutoPlayback()
     stopLivePlayhead()
     setMode('live')
-    retimePlayback(liveMs)
+    startTransport(liveMs)
     setRunning(true)
     setScrubMs(liveMs)
     autoPlayheadMsRef.current = liveMs
     previewCursorMsRef.current = liveMs || null
     displayItemsRef.current = []
     setDisplayItems([])
-  }, [ensureAudioReady, retimePlayback, setMode, stopAutoPlayback, stopLivePlayhead])
+  }, [ensureAudioReady, setMode, startTransport, stopAutoPlayback, stopLivePlayhead])
 
   const startAutoPingPong = useCallback(async (rate: number = DEFAULT_AUTO_PLAYBACK_RATE) => {
     const loopStart = timelineStartMs
@@ -639,6 +696,7 @@ export function useTflEngine() {
     previewCursorMsRef.current = loopStart
     setLoopStartMs(loopStart)
     setLoopEndMs(loopEnd)
+    startTransport(loopStart)
     previewAt(loopStart)
 
     const tick = (frameNow: number) => {
@@ -685,7 +743,7 @@ export function useTflEngine() {
     }
 
     autoPlayRef.current = requestAnimationFrame(tick)
-  }, [ensureAudioReady, previewAt, setMode, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
+  }, [ensureAudioReady, previewAt, setMode, startTransport, stopAutoPlayback, stopLivePlayhead, timelineStartMs])
 
   useEffect(() => {
     queuePollCycle()
@@ -695,6 +753,7 @@ export function useTflEngine() {
       runningRef.current = false
       stopAutoPlayback()
       stopLivePlayhead()
+      stopBedLoop()
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
@@ -702,12 +761,11 @@ export function useTflEngine() {
       clearPollTimeouts()
       clearAllDisplayTimers()
       cancelAll()
-      scheduled.current.clear()
       Tone.getTransport().stop()
       Tone.getTransport().cancel()
       disposeEffects()
     }
-  }, [clearAllDisplayTimers, clearPollTimeouts, queuePollCycle, stopAutoPlayback, stopLivePlayhead])
+  }, [clearAllDisplayTimers, clearPollTimeouts, queuePollCycle, stopAutoPlayback, stopBedLoop, stopLivePlayhead])
 
   return {
     running,

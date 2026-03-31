@@ -419,6 +419,29 @@ export function scheduleArrival(
   return scheduleEvent({ kind: 'note', config }, arrivalTime, onTrigger, shouldTrigger)
 }
 
+export function triggerNoteAtTime(config: ResolvedLineSoundConfig, triggerTime: number): boolean {
+  const engine = getEngineKind(config.synth)
+
+  if (engine === 'PianoSampler') {
+    return triggerPianoSamplerNote(config, triggerTime)
+  }
+
+  const slot = acquireVoice(engine)
+  const token = slot.token + 1
+  slot.token = token
+  slot.state = 'active'
+  slot.lastStart = Tone.now()
+
+  prepareVoiceForNote(slot.synth, config.volume, triggerTime)
+  slot.synth.triggerAttackRelease(config.note, config.duration, triggerTime)
+
+  const id = nextPreviewEventId()
+  activeEvents.set(id, { kind: 'synth', slot, token })
+  const releaseDelay = Math.max(0, triggerTime - Tone.now()) + Tone.Time(config.duration).toSeconds() + RELEASE + 0.5
+  scheduleVoiceIdle(id, slot, token, releaseDelay)
+  return true
+}
+
 export function cancelScheduled(id: number) {
   if (pendingIds.has(id)) {
     Tone.getTransport().clear(id)
