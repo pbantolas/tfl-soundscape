@@ -39,8 +39,8 @@ function App() {
           </DisplayMessage>
         )}
         {visibleDisplayItems.map(item => (
-          <DisplayMessage key={item.id} opacity={item.visible ? 1 : 0}>
-            {item.stationName} — {item.lineName}
+          <DisplayMessage key={item.id} opacity={item.visible ? 1 : 0} color={lineColors[item.lineId]}>
+            {item.stationName}
           </DisplayMessage>
         ))}
       </div>
