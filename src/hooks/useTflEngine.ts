@@ -14,7 +14,7 @@ const BUFFER_HISTORY_MS = 180_000
 const DISPLAY_DURATION_MS = 3000
 const FADE_DURATION_MS = 700
 const MAX_DISPLAY_ITEMS = 3
-const AUTO_PLAYBACK_RATE = 32
+const AUTO_PLAYBACK_RATE = 16
 const PLAYBACK_START_LEAD_MS = 50
 const SCHEDULE_UPDATE_THRESHOLD_S = 15
 const MAX_PREVIEW_EVENTS_PER_STEP = 2
@@ -62,6 +62,16 @@ function findCrossedEvents(events: TimelineEvent[], fromMs: number, toMs: number
 function selectPreviewEvents(events: TimelineEvent[]): TimelineEvent[] {
   if (events.length <= MAX_PREVIEW_EVENTS_PER_STEP) return events
   return events.slice(-MAX_PREVIEW_EVENTS_PER_STEP)
+}
+
+function toDisplayItem(event: TimelineEvent, suffix = ''): DisplayItem {
+  return {
+    id: `display-${event.key}-${event.realWorldMs}${suffix}`,
+    stationName: event.stationName,
+    lineName: event.lineName,
+    lineId: event.lineId,
+    visible: true,
+  }
 }
 
 function isValidTimelinePosition(ms: number | null, startMs: number, endMs: number): ms is number {
@@ -311,15 +321,29 @@ export function useTflEngine() {
     setScrubMs(ms)
     autoPlayheadMsRef.current = ms
 
-    const nearest = findNearest(allEventsRef.current, ms)
-    if (nearest) {
-      setDisplayItems([{ id: 'seek', stationName: nearest.stationName, lineName: nearest.lineName, lineId: nearest.lineId, visible: true }])
-    } else {
-      setDisplayItems([])
-    }
+    const crossedEvents = previousMs === null
+      ? []
+      : findCrossedEvents(allEventsRef.current, previousMs, ms)
+
+    setDisplayItems(prev => {
+      if (crossedEvents.length > 0) {
+        const nextItems = [
+          ...prev,
+          ...crossedEvents.map((event, index) => toDisplayItem(event, `-${ms}-${index}`)),
+        ]
+
+        return nextItems.slice(-MAX_DISPLAY_ITEMS)
+      }
+
+      if (previousMs === null || prev.length === 0) {
+        const nearest = findNearest(allEventsRef.current, ms)
+        return nearest ? [toDisplayItem(nearest)] : []
+      }
+
+      return prev
+    })
 
     if (audioReadyRef.current && previousMs !== null) {
-      const crossedEvents = findCrossedEvents(allEventsRef.current, previousMs, ms)
       const previewEvents = selectPreviewEvents(crossedEvents)
       if (crossedEvents.length > 1) {
         const snapshot = getAudioDebugSnapshot()
