@@ -100,11 +100,11 @@ function getFilter(): Tone.Filter {
     limiter = new Tone.Limiter(-4).toDestination()
   }
   if (!reverb) {
-    reverb = new Tone.Reverb({ decay: 4, preDelay: 0.02, wet: 0.45 }).connect(limiter)
+    reverb = new Tone.Reverb({ decay: 12, preDelay: 0.05, wet: 0.8 }).connect(limiter)
     reverb.generate()
   }
   if (!filter) {
-    filter = new Tone.Filter({ frequency: 3000, type: 'lowpass', rolloff: -12 }).connect(reverb)
+    filter = new Tone.Filter({ frequency: 5000, type: 'lowpass', rolloff: -12 }).connect(reverb)
   }
   return filter
 }

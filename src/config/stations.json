@@ -7,7 +7,9 @@
     "victoria":         { "synth": "PianoSampler", "degrees": [1, 7], "octave": 4, "duration": "4n", "volume": -12 },
     "central":          { "synth": "PianoSampler", "degrees": [2, 5], "octave": 3, "duration": "4n", "volume": -10 },
     "piccadilly":       { "synth": "PianoSampler", "degrees": [4, 5], "octave": 3, "duration": "4n", "volume": -11 },
-    "district":         { "synth": "PianoSampler", "degrees": [1],    "octave": 2, "duration": "4n", "volume": -12 }
+    "circle":       { "synth": "PianoSampler", "degrees": [4, 5], "octave": 4, "duration": "4n", "volume": -11 },
+    "district":         { "synth": "PianoSampler", "degrees": [1],    "octave": 2, "duration": "4n", "volume": -12 },
+    "jubilee":          { "synth": "PianoSampler", "degrees": [3],    "octave": 3, "duration": "4n", "volume": -11 }
   },
   "lineColors": {
     "bakerloo":         "#c8855a",
