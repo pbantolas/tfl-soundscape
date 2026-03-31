@@ -17,6 +17,7 @@ function App() {
     timelineEndMs,
     loopEndMs,
     allEvents,
+    lineColors,
     seekStart,
     seekAndPlay,
     goLive,
@@ -54,6 +55,7 @@ function App() {
           timelineEndMs={timelineEndMs}
           loopEndMs={loopEndMs}
           allEvents={allEvents}
+          lineColors={lineColors}
           isLive={isLive}
           isAutoPingPong={playbackMode === 'autoPingPong'}
           autoRate={autoRate}

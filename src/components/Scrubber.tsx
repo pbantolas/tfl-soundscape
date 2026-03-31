@@ -7,6 +7,7 @@ interface ScrubberProps {
   timelineEndMs: number
   loopEndMs: number
   allEvents: TimelineEvent[]
+  lineColors: Record<string, string>
   isLive: boolean
   isAutoPingPong: boolean
   autoRate: number
@@ -33,6 +34,7 @@ export function Scrubber({
   timelineEndMs,
   loopEndMs,
   allEvents,
+  lineColors,
   isLive,
   isAutoPingPong,
   autoRate,
@@ -180,8 +182,11 @@ export function Scrubber({
         {markerEvents.map(e => (
           <div
             key={e.key}
-            className="absolute top-0 w-px h-full bg-white/20"
-            style={{ left: `${toPercent(e.realWorldMs, timelineStartMs, timelineEndMs)}%` }}
+            className="absolute top-0 w-px h-full opacity-50"
+            style={{
+              left: `${toPercent(e.realWorldMs, timelineStartMs, timelineEndMs)}%`,
+              backgroundColor: lineColors[e.lineId] ?? 'rgba(255,255,255,0.4)',
+            }}
           />
         ))}
 

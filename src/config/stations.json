@@ -8,5 +8,22 @@
     "central":          { "synth": "PianoSampler", "degrees": [2, 5], "octave": 3, "duration": "4n", "volume": -10 },
     "piccadilly":       { "synth": "PianoSampler", "degrees": [4, 5], "octave": 3, "duration": "4n", "volume": -11 },
     "district":         { "synth": "PianoSampler", "degrees": [1],    "octave": 2, "duration": "4n", "volume": -12 }
+  },
+  "lineColors": {
+    "bakerloo":         "#c8855a",
+    "central":          "#f0614a",
+    "circle":           "#f5c842",
+    "district":         "#6abf8b",
+    "dlr":              "#5dcfcf",
+    "elizabeth":        "#9b72c8",
+    "hammersmith-city": "#e8a0b0",
+    "jubilee":          "#8a9bb0",
+    "london-overground":"#f0944a",
+    "metropolitan":     "#a05a7a",
+    "northern":         "#c0c0c0",
+    "piccadilly":       "#7b68c8",
+    "tfl-rail":         "#9b72c8",
+    "victoria":         "#54b5e8",
+    "waterloo-city":    "#70c8a0"
   }
 }

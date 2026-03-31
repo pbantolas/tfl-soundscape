@@ -7,7 +7,7 @@ import type { AppSoundConfig, LineSoundConfig, ScheduledArrival, TimelineEvent }
 import stationsConfig from '../config/stations.json'
 import { applyTimelineWindow, getTimelineBounds } from '../lib/timelineBuffer'
 
-const { lines, tonality } = stationsConfig as unknown as AppSoundConfig
+const { lines, tonality, lineColors } = stationsConfig as unknown as AppSoundConfig
 const POLL_WINDOW_MS = 30_000
 const PRELOAD_LOOKAHEAD_MS = 120_000
 const BUFFER_HISTORY_MS = 180_000
@@ -597,6 +597,7 @@ export function useTflEngine() {
     timelineEndMs,
     loopEndMs,
     allEvents,
+    lineColors,
     seek,
     seekStart,
     seekAndPlay,

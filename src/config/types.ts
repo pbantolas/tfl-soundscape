@@ -22,6 +22,7 @@ export interface TonalityConfig {
 export interface AppSoundConfig {
   tonality: TonalityConfig
   lines: Record<string, LineSoundConfig>
+  lineColors: Record<string, string>
 }
 
 export interface TflPrediction {
