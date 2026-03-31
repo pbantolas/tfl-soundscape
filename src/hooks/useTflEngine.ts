@@ -7,7 +7,7 @@ import type { AppSoundConfig, LineSoundConfig, ScheduledArrival, TimelineEvent }
 import stationsConfig from '../config/stations.json'
 import { applyTimelineWindow, getTimelineBounds } from '../lib/timelineBuffer'
 
-const { lines, tonality, lineColors } = stationsConfig as unknown as AppSoundConfig
+const { lines, tonality, lineColors, lineColorsLight } = stationsConfig as unknown as AppSoundConfig
 const POLL_WINDOW_MS = 30_000
 const PRELOAD_LOOKAHEAD_MS = 120_000
 const BUFFER_HISTORY_MS = 180_000
@@ -93,6 +93,14 @@ export function useTflEngine() {
   const [loopEndMs, setLoopEndMs] = useState(0)
   const [allEvents, setAllEvents] = useState<TimelineEvent[]>([])
   const [hasBufferedEvents, setHasBufferedEvents] = useState(false)
+  const [isDarkMode, setIsDarkMode] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
 
   const scheduled = useRef(new Map<string, ScheduledArrival>())
   const allEventsRef = useRef<TimelineEvent[]>([])
@@ -717,7 +725,7 @@ export function useTflEngine() {
     loopStartMs,
     loopEndMs,
     allEvents,
-    lineColors,
+    lineColors: isDarkMode ? lineColors : lineColorsLight,
     seek,
     seekStart,
     seekAndPlay,
