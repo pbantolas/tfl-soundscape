@@ -18,7 +18,7 @@ interface ScrubberProps {
   onSeek: (ms: number) => void | Promise<void>
   onSeekEnd: (ms: number) => void | Promise<void>
   onGoLive: () => void | Promise<void>
-  onStartAutoPingPong: () => void | Promise<void>
+  onStartAutoPingPong: (rate: number) => void | Promise<void>
   onStart: () => void | Promise<void>
   onStop: () => void
 }
@@ -134,18 +134,21 @@ export function Scrubber({
 
         {hasTimeline && (
           <>
-            {!isAutoPingPong ? (
-              <button
-                onClick={onStartAutoPingPong}
-                className="flex items-center gap-1.5 text-xs text-cyan-300/40 border border-cyan-300/20 px-2.5 py-1 rounded hover:text-cyan-300/70 hover:border-cyan-300/50 transition-colors uppercase tracking-[0.2em] font-pixel"
-              >
-                Auto {autoRate}x
-              </button>
-            ) : (
-              <div className="flex items-center gap-1.5 text-xs text-cyan-200 border border-cyan-300/40 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse" />
-                Auto {autoRate}x
-              </div>
+            {[2, 16].map(rate =>
+              isAutoPingPong && autoRate === rate ? (
+                <div key={rate} className="flex items-center gap-1.5 text-xs text-cyan-200 border border-cyan-300/40 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse" />
+                  Auto {rate}x
+                </div>
+              ) : (
+                <button
+                  key={rate}
+                  onClick={() => onStartAutoPingPong(rate)}
+                  className="flex items-center gap-1.5 text-xs text-cyan-300/40 border border-cyan-300/20 px-2.5 py-1 rounded hover:text-cyan-300/70 hover:border-cyan-300/50 transition-colors uppercase tracking-[0.2em] font-pixel"
+                >
+                  Auto {rate}x
+                </button>
+              )
             )}
 
             {!isLive ? (

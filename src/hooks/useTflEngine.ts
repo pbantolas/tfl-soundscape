@@ -14,7 +14,7 @@ const BUFFER_HISTORY_MS = 180_000
 const DISPLAY_DURATION_MS = 3000
 const FADE_DURATION_MS = 700
 const MAX_DISPLAY_ITEMS = 3
-const AUTO_PLAYBACK_RATE = 16
+const DEFAULT_AUTO_PLAYBACK_RATE = 16
 const PLAYBACK_START_LEAD_MS = 50
 const SCHEDULE_UPDATE_THRESHOLD_S = 15
 const MAX_PREVIEW_EVENTS_PER_STEP = 2
@@ -83,6 +83,7 @@ export function useTflEngine() {
   const [audioReady, setAudioReady] = useState(false)
   const [displayItems, setDisplayItems] = useState<DisplayItem[]>([])
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('live')
+  const [autoRate, setAutoRate] = useState(DEFAULT_AUTO_PLAYBACK_RATE)
   const [scrubMs, setScrubMs] = useState(0)
   const [timelineStartMs, setTimelineStartMs] = useState(0)
   const [timelineEndMs, setTimelineEndMs] = useState(0)
@@ -106,6 +107,7 @@ export function useTflEngine() {
   const autoLoopEndMsRef = useRef(0)
   const pendingLoopEndMsRef = useRef(0)
   const autoDirectionRef = useRef<1 | -1>(1)
+  const autoRateRef = useRef(DEFAULT_AUTO_PLAYBACK_RATE)
   const autoPlayheadMsRef = useRef(0)
   const lastAutoTickMsRef = useRef(0)
   const playbackOriginMsRef = useRef<number | null>(null)
@@ -586,7 +588,7 @@ export function useTflEngine() {
     setDisplayItems([])
   }, [ensureAudioReady, retimePlayback, setMode, stopAutoPlayback, stopLivePlayhead])
 
-  const startAutoPingPong = useCallback(async () => {
+  const startAutoPingPong = useCallback(async (rate: number = DEFAULT_AUTO_PLAYBACK_RATE) => {
     const loopStart = timelineStartMs
     const loopEnd = latestTimelineEndMsRef.current
     const loopSpan = loopEnd - loopStart
@@ -601,6 +603,8 @@ export function useTflEngine() {
     stopLivePlayhead()
     setMode('autoPingPong')
     setRunning(false)
+    autoRateRef.current = rate
+    setAutoRate(rate)
     autoLoopStartMsRef.current = loopStart
     autoLoopEndMsRef.current = loopEnd
     pendingLoopEndMsRef.current = loopEnd
@@ -622,7 +626,7 @@ export function useTflEngine() {
       const elapsedMs = frameNow - lastAutoTickMsRef.current
       lastAutoTickMsRef.current = frameNow
 
-      let nextMs = autoPlayheadMsRef.current + elapsedMs * AUTO_PLAYBACK_RATE * autoDirectionRef.current
+      let nextMs = autoPlayheadMsRef.current + elapsedMs * autoRateRef.current * autoDirectionRef.current
       let direction = autoDirectionRef.current
       let restartedAtStart = false
 
@@ -683,7 +687,7 @@ export function useTflEngine() {
     start,
     stop,
     playbackMode,
-    autoRate: AUTO_PLAYBACK_RATE,
+    autoRate,
     isLive: running && isLiveMode,
     scrubMs,
     timelineStartMs,
