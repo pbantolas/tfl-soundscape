@@ -164,13 +164,13 @@ export function Scrubber({
         <button
           disabled={!hasTimeline}
           onClick={running ? onStop : onStart}
-          className="w-11 h-11 rounded-full border border-fg/25 hover:border-fg/50 disabled:opacity-35 disabled:hover:border-fg/25 transition-colors flex items-center justify-center shrink-0"
+          className="w-11 h-11 rounded-full border border-fg/50 hover:border-fg/80 disabled:opacity-35 disabled:hover:border-fg/50 transition-colors flex items-center justify-center shrink-0"
           title={audioReady ? undefined : 'Unlock audio and start playback'}
         >
           {running ? (
-            <div className="w-2.5 h-2.5 rounded-sm bg-fg/70" />
+            <div className="w-2.5 h-2.5 rounded-sm bg-fg/90" />
           ) : (
-            <div className="w-0 h-0 border-l-[8px] border-l-fg/70 border-y-[6px] border-y-transparent ml-0.5" />
+            <div className="w-0 h-0 border-l-[8px] border-l-fg/90 border-y-[6px] border-y-transparent ml-0.5" />
           )}
         </button>
         <div className="flex-1">
@@ -182,7 +182,7 @@ export function Scrubber({
           >
             {/* Filled track up to scrub position */}
             <div
-              className="absolute left-0 top-0 h-full bg-fg/8"
+              className="absolute left-0 top-0 h-full bg-fg/15"
               style={{ width: `${thumbPercent}%` }}
             />
 
