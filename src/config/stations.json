@@ -9,8 +9,8 @@
       "stationName": "Oxford Circus",
       "lines": {
         "victoria":  { "synth": "PianoSampler", "degree": 1, "octave": 4, "duration": "4n", "volume": -12 },
-        "central":   { "synth": "PianoSampler", "degree": 3, "octave": 3, "duration": "4n", "volume": -10 },
-        "bakerloo":  { "synth": "PianoSampler", "degree": 5, "octave": 3, "duration": "4n", "volume": -13 }
+        "central":   { "synth": "PianoSampler", "degree": 2, "octave": 3, "duration": "4n", "volume": -10 },
+        "bakerloo":  { "synth": "PianoSampler", "degree": 6, "octave": 3, "duration": "4n", "volume": -13 }
       }
     },
     {
@@ -19,7 +19,7 @@
       "lines": {
         "central":       { "synth": "PianoSampler", "degree": 1, "octave": 3, "duration": "4n", "volume": -10 },
         "northern":      { "synth": "PianoSampler", "degree": 1, "octave": 2, "duration": "4n", "volume": -8 },
-        "waterloo-city": { "synth": "PianoSampler", "degree": 3, "octave": 2, "duration": "4n", "volume": -10 },
+        "waterloo-city": { "synth": "PianoSampler", "degree": 2, "octave": 2, "duration": "4n", "volume": -10 },
         "district":      { "synth": "PianoSampler", "degree": 5, "octave": 3, "duration": "4n", "volume": -12 },
         "circle":        { "synth": "PianoSampler", "degree": 5, "octave": 3, "duration": "4n", "volume": -13 }
       }
