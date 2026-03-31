@@ -125,6 +125,7 @@ export function Scrubber({
     <div className="fixed bottom-0 left-0 right-0 px-4 pb-8 pt-3 sm:px-6 sm:pb-6">
       {hasTimeline && (
         <div className="flex items-center gap-2 sm:gap-3 mb-2">
+          <div className="w-11 shrink-0" />
           {[4, 16].map(rate =>
             isAutoPingPong && autoRate === rate ? (
               <div key={rate} className="flex items-center gap-1.5 text-xs text-cyan-600 border border-cyan-500/50 dark:text-cyan-200 dark:border-cyan-300/40 px-2.5 py-1 rounded uppercase tracking-[0.2em] font-pixel">
